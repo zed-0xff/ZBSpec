@@ -2,5 +2,6 @@ name=ZBTest
 id=ZBTest
 author=zed_0xff
 url=https://github.com/zed-0xff
-poster=poster.png
-icon=modIcon.png
+
+javaJarFile=media/java/client/build/libs/client.jar
+javaPkgName=me.zed_0xff.zbtest
