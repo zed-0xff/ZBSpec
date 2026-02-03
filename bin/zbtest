@@ -1,0 +1,79 @@
+#!/usr/bin/env ruby
+# frozen_string_literal: true
+
+require 'optparse'
+
+# Add lib to load path
+$LOAD_PATH.unshift File.expand_path('../lib', __dir__)
+require 'zbtest'
+
+# Parse command line options
+options = {
+  config: 'tests/zbtest.yml',  # Default config path
+  mod_dir: nil
+}
+
+OptionParser.new do |opts|
+  opts.banner = 'Usage: zbtest [options]'
+
+  opts.on('-c', '--config PATH', 'Path to config file (default: tests/zbtest.yml)') do |path|
+    options[:config] = path
+  end
+
+  opts.on('-m', '--mod-dir PATH', 'Path to mod directory') do |path|
+    options[:mod_dir] = path
+  end
+
+  opts.on('-h', '--help', 'Show this help') do
+    puts opts
+    exit
+  end
+
+  opts.on('-v', '--version', 'Show version') do
+    puts "ZBTest v#{ZBTest::VERSION}"
+    exit
+  end
+end.parse!
+
+# Verify config file exists
+unless File.exist?(options[:config])
+  abort "❌ Config file not found: #{options[:config]}\n" \
+        "   Create it or specify with --config PATH\n" \
+        "   Example: ~/projects/zomboid/ZBTest/config/example.yml"
+end
+
+# Load mod-specific test runner if available
+test_runner_class = nil
+
+if options[:mod_dir]
+  # Try tests/framework first, then test (legacy)
+  test_paths = [
+    File.join(options[:mod_dir], 'tests', 'framework', 'test_runner.rb'),
+    File.join(options[:mod_dir], 'test', 'test_runner.rb')
+  ]
+  
+  mod_test_file = test_paths.find { |path| File.exist?(path) }
+  
+  if mod_test_file
+    puts "📦 Loading mod tests from: #{mod_test_file}"
+    require mod_test_file
+    
+    # Find the custom test runner class
+    # Look for classes that inherit from ZBTest::TestRunner
+    test_runner_class = ObjectSpace.each_object(Class).find do |klass|
+      klass < ZBTest::TestRunner && klass != ZBTest::TestRunner
+    end
+    
+    if test_runner_class
+      puts "✓ Using custom test runner: #{test_runner_class}"
+    end
+  end
+end
+
+# Run the harness
+FileUtils.mkdir_p('logs')
+harness = ZBTest::Harness.new(
+  config_path: options[:config],
+  test_runner_class: test_runner_class
+)
+harness.run
