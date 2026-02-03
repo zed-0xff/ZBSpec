@@ -1,11 +1,11 @@
 # Example ZBTest configuration (YAML format)
 
-# API settings
+# API settings (will use random port automatically)
 api_port: 4445
 startup_timeout: 120
 
 # Game control
-use_running_game: true    # Use already-running game
+use_running_game: false   # Launch game automatically (default: false)
 auto_shutdown: false      # Don't stop game after tests
 
 # Game launch settings (if use_running_game: false)
@@ -14,9 +14,9 @@ server_mode: false
 debug: true
 
 # Mods to load
+# Note: ZombieBuddy and ZBTest are automatically included
 mods:
   - YourModName
-  - ZombieBuddy  # Required for API
 
 # Optional settings
 # test_world: TestWorld

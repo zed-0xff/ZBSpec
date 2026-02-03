@@ -10,9 +10,24 @@ module ZBTest
       @config = config
       @pid = nil
       @running = false
+      @pid_file = File.join('tmp', 'zbtest.pid')
     end
 
     def start
+      # Check for existing PID file
+      if File.exist?(@pid_file)
+        existing_pid = File.read(@pid_file).strip.to_i
+        if process_alive?(existing_pid)
+          puts "✓ Game already running (PID: #{existing_pid})"
+          @pid = existing_pid
+          @running = true
+          return
+        else
+          puts "⚠️  Stale PID file found, removing..."
+          File.delete(@pid_file)
+        end
+      end
+
       if running?
         puts '✓ Game already running'
         return
@@ -27,6 +42,9 @@ module ZBTest
       puts "Launching game with args: #{args.inspect}"
       @pid = spawn(*args)
       @running = true
+
+      # Write PID file
+      write_pid_file
 
       puts "  PID: #{@pid}"
       puts "  Mods: #{config['mods'].join(', ')}" if config['mods']
@@ -43,21 +61,37 @@ module ZBTest
       Process.wait(@pid, Process::WNOHANG)
       @running = false
       @pid = nil
+      
+      # Remove PID file
+      File.delete(@pid_file) if File.exist?(@pid_file)
     rescue Errno::ESRCH
       # Process already dead
       @running = false
+      File.delete(@pid_file) if File.exist?(@pid_file)
     end
 
     def running?
       return false unless @pid
 
-      Process.kill(0, @pid)
+      process_alive?(@pid)
+    end
+
+    private
+
+    def process_alive?(pid)
+      return false unless pid && pid > 0
+      
+      Process.kill(0, pid)
       true
     rescue Errno::ESRCH
       false
     end
 
-    private
+    def write_pid_file
+      FileUtils.mkdir_p('tmp')
+      File.write(@pid_file, @pid.to_s)
+      puts "  PID file: #{File.expand_path(@pid_file)}"
+    end
 
     def build_launch_args
       game_exe = find_executable
@@ -89,8 +123,8 @@ module ZBTest
       end
       FileUtils.touch(File.join(mods_dir, 'reset-mods-42_00.txt'))
 
-      FileUtils.ln_sf(File.expand_path(Dir.pwd),                File.join(mods_dir, 'this'))
-      FileUtils.ln_sf(File.join(ZBTest.root, 'mods', 'ZBTest'), File.join(mods_dir, 'ZBTest'))
+      FileUtils.ln_sf(File.expand_path(Dir.pwd),                File.join(mods_dir, 'this'))   unless File.exist?(File.join(mods_dir, 'this'))
+      FileUtils.ln_sf(File.join(ZBTest.root, 'mods', 'ZBTest'), File.join(mods_dir, 'ZBTest')) unless File.exist?(File.join(mods_dir, 'ZBTest'))
 
       default_txt = []
       default_txt << "VERSION = 1,"

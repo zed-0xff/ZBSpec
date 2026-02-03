@@ -17,7 +17,7 @@ module ZBTest
       'api_port' => 4445,
       'startup_timeout' => 120,
       'auto_shutdown' => false,
-      'use_running_game' => true,
+      'use_running_game' => false,
       'game_path' => nil,  # Auto-detect by default
       'server_mode' => false,
       'debug' => true,

@@ -2,7 +2,7 @@
 # Example ZBTest configuration
 # Copy to your mod's tests/framework/config.yml
 
-# ZombieBuddy API port
+# ZombieBuddy API port (will use random port automatically)
 api_port: 4445
 
 # Seconds to wait for game startup
@@ -11,8 +11,8 @@ startup_timeout: 120
 # Stop game after tests complete
 auto_shutdown: false
 
-# Use already-running game instead of launching
-use_running_game: true
+# Use already-running game instead of launching (default: false)
+use_running_game: false
 
 # Path to Project Zomboid (for auto-launch)
 game_path: /Applications/Project Zomboid.app
@@ -24,6 +24,6 @@ server_mode: false
 debug: true
 
 # Your mod(s) to test
-# Note: ZombieBuddy is automatically included (required for API)
+# Note: ZombieBuddy and ZBTest are automatically included
 mods:
   - YourModName
