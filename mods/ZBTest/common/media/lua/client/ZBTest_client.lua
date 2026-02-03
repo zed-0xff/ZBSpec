@@ -4,9 +4,9 @@ end
 
 UIManager.setShowLuaDebuggerOnError(false)
 
-debugScenarios.DebugScenarioTGreen = {
+debugScenarios.DebugScenarioZBTest = {
     forceLaunch = true, -- XXX
-    name = "Turbo Green Test",
+    name = "ZBTest",
     world = "Muldraugh, KY",
     startLoc = {x=8496, y=5789, z=0},
     setSandbox = function()
