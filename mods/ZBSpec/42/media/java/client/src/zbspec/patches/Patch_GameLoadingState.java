@@ -1,4 +1,4 @@
-package zbspec.patches;
+package me.zed_0xff.zbspec;
 
 import me.zed_0xff.zombie_buddy.Patch;
 

@@ -14,5 +14,6 @@ debugScenarios.DebugScenarioZBSpec = {
         SandboxVars.Zombies = 6;
     end,
     onStart = function()
+        UIManager.setShowLuaDebuggerOnError(false)
     end
 }
