@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module ZBTest
+module ZBSpec
   # Configuration management for PZ test harness
   class Config
     # Common Project Zomboid installation paths
@@ -22,7 +22,7 @@ module ZBTest
       'server_mode' => false,
       'debug' => true,
       'mods' => [],
-      'test_glob' => 'test/**/*_test.lua'
+      'spec_glob' => 'spec/**/*_spec.lua'
     }.freeze
 
     attr_reader :data

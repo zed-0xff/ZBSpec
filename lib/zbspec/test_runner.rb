@@ -1,15 +1,15 @@
 # frozen_string_literal: true
 
-module ZBTest
+module ZBSpec
   # Base test runner - extend this for mod-specific tests
   class TestRunner
-    attr_reader :api_client, :config, :mod_namespace, :test_files
+    attr_reader :api_client, :config, :mod_namespace, :spec_files
 
-    def initialize(api_client, config, mod_namespace: nil, test_files: nil)
+    def initialize(api_client, config, mod_namespace: nil, spec_files: nil)
       @api_client = api_client
       @config = config
       @mod_namespace = mod_namespace
-      @test_files = test_files || discover_test_files
+      @spec_files = spec_files || discover_spec_files
     end
 
     # Override this in subclass to define mod-specific tests
@@ -25,9 +25,9 @@ module ZBTest
         return results
       end
 
-      # Run Lua test files
-      if @test_files.any?
-        results.add_section('Lua Tests', run_lua_tests)
+      # Run Lua spec files
+      if @spec_files.any?
+        results.add_section('Lua Specs', run_lua_specs)
       end
 
       results
@@ -35,43 +35,43 @@ module ZBTest
 
     protected
 
-    # Discover test files using glob pattern
-    def discover_test_files
-      glob_pattern = config['test_glob'] || 'test/**/*_test.lua'
+    # Discover spec files using glob pattern
+    def discover_spec_files
+      glob_pattern = config['spec_glob'] || 'spec/**/*_spec.lua'
       files = Dir.glob(glob_pattern).sort
       
       if files.empty?
-        puts "⚠️  No test files found matching: #{glob_pattern}"
+        puts "⚠️  No spec files found matching: #{glob_pattern}"
       else
-        puts "📋 Found #{files.length} test file(s):"
+        puts "📋 Found #{files.length} spec file(s):"
         files.each { |f| puts "   - #{f}" }
       end
       
       files
     end
 
-    # Run Lua test files
-    def run_lua_tests
+    # Run Lua spec files
+    def run_lua_specs
       tests = []
       
-      @test_files.each do |test_file|
-        unless File.exist?(test_file)
-          tests << test("#{test_file}", false, error: "File not found")
+      @spec_files.each do |spec_file|
+        unless File.exist?(spec_file)
+          tests << test("#{spec_file}", false, error: "File not found")
           next
         end
         
-        # Read and execute the test file
-        lua_code = File.read(test_file)
+        # Read and execute the spec file
+        lua_code = File.read(spec_file)
         
         begin
-          # Execute the test file in the game
+          # Execute the spec file in the game
           result = api_client.execute(lua_code)
           
-          # Test files should return true on success, false or error on failure
+          # Spec files should return true on success, false or error on failure
           passed = result == true || result == 'true'
-          tests << test(test_file, passed, error: passed ? nil : "Test returned: #{result.inspect}")
+          tests << test(spec_file, passed, error: passed ? nil : "Spec returned: #{result.inspect}")
         rescue StandardError => e
-          tests << test(test_file, false, error: e.message)
+          tests << test(spec_file, false, error: e.message)
         end
       end
       

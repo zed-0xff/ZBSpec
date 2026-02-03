@@ -4,9 +4,9 @@ end
 
 UIManager.setShowLuaDebuggerOnError(false)
 
-debugScenarios.DebugScenarioZBTest = {
-    forceLaunch = true, -- XXX
-    name = "ZBTest",
+debugScenarios.DebugScenarioZBSpec = {
+    forceLaunch = true,
+    name = "ZBSpec",
     world = "Muldraugh, KY",
     startLoc = {x=8496, y=5789, z=0},
     setSandbox = function()

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module ZBTest
+module ZBSpec
   # Formats and displays test results
   class TestReporter
     RESET = "\e[0m"
@@ -18,7 +18,7 @@ module ZBTest
     end
 
     def display
-      puts "\n#{BOLD}#{CYAN}Test Results#{RESET}"
+      puts "\n#{BOLD}#{CYAN}Spec Results#{RESET}"
       puts '=' * 50
 
       results.sections.each do |section_name, test_cases|

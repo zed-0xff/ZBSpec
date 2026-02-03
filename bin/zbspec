@@ -5,20 +5,20 @@ require 'optparse'
 
 # Add lib to load path
 $LOAD_PATH.unshift File.expand_path('../lib', __dir__)
-require 'zbtest'
+require 'zbspec'
 
 # Parse command line options
 options = {
-  config: 'test/zbtest.yml',  # Default config path
+  config: 'spec/zbspec.yml',  # Default config path
   mod_dir: nil,
-  test_files: [],
+  spec_files: [],
   verbose: false
 }
 
 OptionParser.new do |opts|
-  opts.banner = 'Usage: zbtest [options] [test_files...]'
+  opts.banner = 'Usage: zbspec [options] [spec_files...]'
 
-  opts.on('-c', '--config PATH', 'Path to config file (default: test/zbtest.yml)') do |path|
+  opts.on('-c', '--config PATH', 'Path to config file (default: spec/zbspec.yml)') do |path|
     options[:config] = path
   end
 
@@ -33,62 +33,62 @@ OptionParser.new do |opts|
   opts.on('-h', '--help', 'Show this help') do
     puts opts
     puts "\nExamples:"
-    puts "  zbtest                              # Run all tests matching test_glob"
-    puts "  zbtest test/my_test.lua             # Run specific test file"
-    puts "  zbtest test/foo_test.lua test/bar_test.lua  # Run multiple files"
+    puts "  zbspec                              # Run all specs matching spec_glob"
+    puts "  zbspec spec/my_spec.lua             # Run specific spec file"
+    puts "  zbspec spec/foo_spec.lua spec/bar_spec.lua  # Run multiple files"
     exit
   end
 
   opts.on('--version', 'Show version') do
-    puts "ZBTest v#{ZBTest::VERSION}"
+    puts "ZBSpec v#{ZBSpec::VERSION}"
     exit
   end
 end.parse!
 
-# Remaining arguments are test files
-options[:test_files] = ARGV unless ARGV.empty?
+# Remaining arguments are spec files
+options[:spec_files] = ARGV unless ARGV.empty?
 
 # Verify config file exists
 unless File.exist?(options[:config])
   abort "❌ Config file not found: #{options[:config]}\n" \
         "   Create it or specify with --config PATH\n" \
-        "   Example: test/zbtest.yml"
+        "   Example: spec/zbspec.yml"
 end
 
 # Load mod-specific test runner if available
 test_runner_class = nil
 
 if options[:mod_dir]
-  # Try tests/framework first, then test (legacy)
-  test_paths = [
-    File.join(options[:mod_dir], 'tests', 'framework', 'test_runner.rb'),
-    File.join(options[:mod_dir], 'test', 'test_runner.rb')
+  # Try spec/framework first, then spec (legacy)
+  spec_paths = [
+    File.join(options[:mod_dir], 'spec', 'framework', 'spec_runner.rb'),
+    File.join(options[:mod_dir], 'spec', 'spec_runner.rb')
   ]
   
-  mod_test_file = test_paths.find { |path| File.exist?(path) }
+  mod_spec_file = spec_paths.find { |path| File.exist?(path) }
   
-  if mod_test_file
-    puts "📦 Loading mod tests from: #{mod_test_file}"
-    require mod_test_file
+  if mod_spec_file
+    puts "📦 Loading mod specs from: #{mod_spec_file}"
+    require mod_spec_file
     
     # Find the custom test runner class
-    # Look for classes that inherit from ZBTest::TestRunner
+    # Look for classes that inherit from ZBSpec::TestRunner
     test_runner_class = ObjectSpace.each_object(Class).find do |klass|
-      klass < ZBTest::TestRunner && klass != ZBTest::TestRunner
+      klass < ZBSpec::TestRunner && klass != ZBSpec::TestRunner
     end
     
     if test_runner_class
-      puts "✓ Using custom test runner: #{test_runner_class}"
+      puts "✓ Using custom spec runner: #{test_runner_class}"
     end
   end
 end
 
 # Run the harness
 FileUtils.mkdir_p('logs')
-harness = ZBTest::Harness.new(
+harness = ZBSpec::Harness.new(
   config_path: options[:config],
   test_runner_class: test_runner_class,
-  test_files: options[:test_files].empty? ? nil : options[:test_files],
+  spec_files: options[:spec_files].empty? ? nil : options[:spec_files],
   verbose: options[:verbose]
 )
 harness.run

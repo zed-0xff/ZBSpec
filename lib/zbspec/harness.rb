@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-module ZBTest
+module ZBSpec
   # Main test harness orchestrator
   class Harness
     attr_reader :config, :launcher, :api_client, :test_runner, :verbose
 
-    def initialize(config_path: nil, test_runner_class: nil, test_files: nil, verbose: false)
+    def initialize(config_path: nil, test_runner_class: nil, spec_files: nil, verbose: false)
       @config = Config.new(config_path)
       @launcher = GameLauncher.new(@config)
       @verbose = verbose
@@ -17,11 +17,11 @@ module ZBTest
       
       # Use provided test runner class or default
       runner_class = test_runner_class || TestRunner
-      @test_runner = runner_class.new(@api_client, @config, test_files: test_files)
+      @test_runner = runner_class.new(@api_client, @config, spec_files: spec_files)
     end
 
     def run
-      puts '🚀 PZ Test Harness Starting'
+      puts '🚀 PZ Spec Harness Starting'
       puts '=' * 50
 
       # Launch game (if not already running)
@@ -37,8 +37,8 @@ module ZBTest
       # Wait for player to spawn
       api_client.wait_for_player(timeout: config['startup_timeout'])
 
-      # Run all tests
-      puts "\n🧪 Running Test Suite"
+      # Run all specs
+      puts "\n🧪 Running Spec Suite"
       puts '=' * 50
       results = test_runner.run_all
 

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module ZBTest
+module ZBSpec
   # Represents a single test case result
   class TestCase
     attr_reader :name, :passed, :error

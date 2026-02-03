@@ -1,4 +1,4 @@
-# Example ZBTest configuration (YAML format)
+# Example ZBSpec configuration (YAML format)
 
 # API settings (will use random port automatically)
 api_port: 4445
@@ -6,18 +6,18 @@ startup_timeout: 120
 
 # Game control
 use_running_game: false   # Launch game automatically (default: false)
-auto_shutdown: false      # Don't stop game after tests
+auto_shutdown: false      # Don't stop game after specs
 
 # Game launch settings (if use_running_game: false)
 game_path: /Applications/Project Zomboid.app
 server_mode: false
 debug: true
 
-# Test file discovery pattern (glob)
-test_glob: test/**/*_test.lua
+# Spec file discovery pattern (glob)
+spec_glob: spec/**/*_spec.lua
 
 # Mods to load
-# Note: ZombieBuddy and ZBTest are automatically included
+# Note: ZombieBuddy and ZBSpec are automatically included
 mods:
   - YourModName
 

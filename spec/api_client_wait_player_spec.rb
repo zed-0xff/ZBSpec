@@ -1,16 +1,16 @@
 # frozen_string_literal: true
 
-require 'zbtest'
+require 'zbspec'
 require 'rspec'
 require 'timeout'
 require 'tempfile'
 
-RSpec.describe ZBTest::APIClient do
-  let(:client) { ZBTest::APIClient.new(port: 4445) }
+RSpec.describe ZBSpec::APIClient do
+  let(:client) { ZBSpec::APIClient.new(port: 4445) }
 
   describe '#discover_port' do
     let(:temp_port_file) { Tempfile.new(['zbLuaAPI', '.txt']) }
-    let(:client_with_file) { ZBTest::APIClient.new(port_file: temp_port_file.path) }
+    let(:client_with_file) { ZBSpec::APIClient.new(port_file: temp_port_file.path) }
 
     after do
       temp_port_file.unlink
@@ -41,7 +41,7 @@ RSpec.describe ZBTest::APIClient do
 
     context 'when port is already set' do
       it 'skips discovery' do
-        client_already_set = ZBTest::APIClient.new(port: 4445)
+        client_already_set = ZBSpec::APIClient.new(port: 4445)
         expect(client_already_set.discover_port).to be_nil
         expect(client_already_set.port).to eq(4445)
       end
@@ -51,7 +51,7 @@ RSpec.describe ZBTest::APIClient do
       it 'raises APIError after timeout' do
         expect {
           client_with_file.discover_port(timeout: 2)
-        }.to raise_error(ZBTest::APIError, /Could not discover API port after 2s/)
+        }.to raise_error(ZBSpec::APIError, /Could not discover API port after 2s/)
       end
     end
   end
@@ -84,7 +84,7 @@ RSpec.describe ZBTest::APIClient do
         
         expect {
           client.wait_for_player(timeout: 2)
-        }.to raise_error(ZBTest::APIError, /Player not spawned after 2s timeout/)
+        }.to raise_error(ZBSpec::APIError, /Player not spawned after 2s timeout/)
       end
     end
 

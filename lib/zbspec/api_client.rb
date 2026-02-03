@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module ZBTest
+module ZBSpec
   # API client for communicating with ZombieBuddy
   class APIClient
     API_TIMEOUT = 5

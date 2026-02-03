@@ -1,6 +1,6 @@
 ---
-# Example ZBTest configuration
-# Copy to your mod's tests/framework/config.yml
+# Example ZBSpec configuration
+# Copy to your mod's spec/zbspec.yml
 
 # ZombieBuddy API port (will use random port automatically)
 api_port: 4445
@@ -8,7 +8,7 @@ api_port: 4445
 # Seconds to wait for game startup
 startup_timeout: 120
 
-# Stop game after tests complete
+# Stop game after specs complete
 auto_shutdown: false
 
 # Use already-running game instead of launching (default: false)
@@ -23,10 +23,10 @@ server_mode: false
 # Enable debug mode
 debug: true
 
-# Test file discovery pattern (glob)
-test_glob: test/**/*_test.lua
+# Spec file discovery pattern (glob)
+spec_glob: spec/**/*_spec.lua
 
 # Your mod(s) to test
-# Note: ZombieBuddy and ZBTest are automatically included
+# Note: ZombieBuddy and ZBSpec are automatically included
 mods:
   - YourModName

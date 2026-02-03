@@ -1,7 +1,7 @@
-name=ZBTest
-id=ZBTest
+name=ZBSpec
+id=ZBSpec
 author=zed_0xff
 url=https://github.com/zed-0xff
 
 javaJarFile=media/java/client/build/libs/client.jar
-javaPkgName=me.zed_0xff.zbtest
+javaPkgName=zbspec.patches

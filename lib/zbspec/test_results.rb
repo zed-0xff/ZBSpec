@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-module ZBTest
+module ZBSpec
   # Collection of test results organized by section
   class TestResults
     attr_reader :sections

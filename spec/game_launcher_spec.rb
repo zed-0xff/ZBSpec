@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
-require 'zbtest'
+require 'zbspec'
 require 'rspec'
 require 'tempfile'
 
-RSpec.describe ZBTest::GameLauncher do
+RSpec.describe ZBSpec::GameLauncher do
   let(:config) do
     {
       'game_path' => '/path/to/game',
@@ -16,7 +16,7 @@ RSpec.describe ZBTest::GameLauncher do
   end
   
   let(:launcher) { described_class.new(config) }
-  let(:pid_file) { File.join('tmp', 'zbtest.pid') }
+  let(:pid_file) { File.join('tmp', 'zbspec.pid') }
 
   before do
     # Clean up any existing PID file
@@ -96,41 +96,41 @@ RSpec.describe ZBTest::GameLauncher do
       expect(mod_list.first).to eq('ZombieBuddy')
     end
 
-    it 'includes ZBTest after ZombieBuddy' do
+    it 'includes ZBSpec after ZombieBuddy' do
       mod_list = launcher.send(:build_mod_list)
       expect(mod_list[0]).to eq('ZombieBuddy')
-      expect(mod_list[1]).to eq('ZBTest')
+      expect(mod_list[1]).to eq('ZBSpec')
     end
 
-    it 'adds user mods after ZombieBuddy and ZBTest' do
+    it 'adds user mods after ZombieBuddy and ZBSpec' do
       mod_list = launcher.send(:build_mod_list)
-      expect(mod_list).to eq(['ZombieBuddy', 'ZBTest', 'TestMod', 'AnotherMod'])
+      expect(mod_list).to eq(['ZombieBuddy', 'ZBSpec', 'TestMod', 'AnotherMod'])
     end
 
     it 'does not duplicate ZombieBuddy if user includes it' do
       config['mods'] = ['ZombieBuddy', 'TestMod']
       mod_list = launcher.send(:build_mod_list)
       expect(mod_list.count('ZombieBuddy')).to eq(1)
-      expect(mod_list).to eq(['ZombieBuddy', 'ZBTest', 'TestMod'])
+      expect(mod_list).to eq(['ZombieBuddy', 'ZBSpec', 'TestMod'])
     end
 
-    it 'does not duplicate ZBTest if user includes it' do
-      config['mods'] = ['ZBTest', 'TestMod']
+    it 'does not duplicate ZBSpec if user includes it' do
+      config['mods'] = ['ZBSpec', 'TestMod']
       mod_list = launcher.send(:build_mod_list)
-      expect(mod_list.count('ZBTest')).to eq(1)
-      expect(mod_list).to eq(['ZombieBuddy', 'ZBTest', 'TestMod'])
+      expect(mod_list.count('ZBSpec')).to eq(1)
+      expect(mod_list).to eq(['ZombieBuddy', 'ZBSpec', 'TestMod'])
     end
 
     it 'works with no user mods' do
       config['mods'] = []
       mod_list = launcher.send(:build_mod_list)
-      expect(mod_list).to eq(['ZombieBuddy', 'ZBTest'])
+      expect(mod_list).to eq(['ZombieBuddy', 'ZBSpec'])
     end
 
     it 'works with nil mods' do
       config['mods'] = nil
       mod_list = launcher.send(:build_mod_list)
-      expect(mod_list).to eq(['ZombieBuddy', 'ZBTest'])
+      expect(mod_list).to eq(['ZombieBuddy', 'ZBSpec'])
     end
   end
 end

@@ -7,8 +7,8 @@ require 'uri'
 require 'timeout'
 require 'fileutils'
 
-# Main ZBTest module
-module ZBTest
+# Main ZBSpec module
+module ZBSpec
   VERSION = '1.0.0'
 
   class Error < StandardError; end
@@ -22,11 +22,11 @@ module ZBTest
 end
 
 # Load all components
-require_relative 'zbtest/config'
-require_relative 'zbtest/api_client'
-require_relative 'zbtest/game_launcher'
-require_relative 'zbtest/test_case'
-require_relative 'zbtest/test_results'
-require_relative 'zbtest/test_runner'
-require_relative 'zbtest/test_reporter'
-require_relative 'zbtest/harness'
+require_relative 'zbspec/config'
+require_relative 'zbspec/api_client'
+require_relative 'zbspec/game_launcher'
+require_relative 'zbspec/test_case'
+require_relative 'zbspec/test_results'
+require_relative 'zbspec/test_runner'
+require_relative 'zbspec/test_reporter'
+require_relative 'zbspec/harness'

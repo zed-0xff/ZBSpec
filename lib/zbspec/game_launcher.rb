@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 require 'fileutils'
 
-module ZBTest
+module ZBSpec
   # Handles launching and stopping the game
   class GameLauncher
     attr_reader :config, :pid
@@ -10,7 +10,7 @@ module ZBTest
       @config = config
       @pid = nil
       @running = false
-      @pid_file = File.join('tmp', 'zbtest.pid')
+      @pid_file = File.join('tmp', 'zbspec.pid')
     end
 
     def start
@@ -117,8 +117,8 @@ module ZBTest
       
       # Create symlink to latest log
       latest_link = File.expand_path('tmp/logs/last.log')
-      File.delete(latest_link) if File.exist?(latest_link)
-      File.symlink(log_file, latest_link)
+      File.delete(latest_link) if File.exist?(latest_link) || File.symlink?(latest_link)
+      File.symlink(File.basename(log_file), latest_link)
       
       log_file
     end
@@ -153,8 +153,12 @@ module ZBTest
       end
       FileUtils.touch(File.join(mods_dir, 'reset-mods-42_00.txt'))
 
-      FileUtils.ln_sf(File.expand_path(Dir.pwd),                File.join(mods_dir, 'this'))
-      FileUtils.ln_sf(File.join(ZBTest.root, 'mods', 'ZBTest'), File.join(mods_dir, 'ZBTest'))
+      # Create symlinks only if they don't exist
+      this_link = File.join(mods_dir, 'this')
+      FileUtils.ln_sf(File.expand_path(Dir.pwd), this_link) unless File.exist?(this_link)
+      
+      zbspec_link = File.join(mods_dir, 'ZBSpec')
+      FileUtils.ln_sf(File.join(ZBSpec.root, 'mods', 'ZBSpec'), zbspec_link) unless File.exist?(zbspec_link)
 
       default_txt = []
       default_txt << "VERSION = 1,"
@@ -170,7 +174,7 @@ module ZBTest
     def build_mod_list
       mods = []
       mods << 'ZombieBuddy'
-      mods << 'ZBTest'
+      mods << 'ZBSpec'
       
       # Add user mods
       if config['mods']&.any?
