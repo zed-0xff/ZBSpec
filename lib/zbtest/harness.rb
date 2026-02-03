@@ -8,7 +8,11 @@ module ZBTest
     def initialize(config_path: nil, test_runner_class: nil)
       @config = Config.new(config_path)
       @launcher = GameLauncher.new(@config)
-      @api_client = APIClient.new(port: @config['api_port'])
+      
+      # Create API client with port file path for discovery
+      cache_dir = File.expand_path(@config['cache_dir'] || './tmp/cache')
+      port_file = File.join(cache_dir, 'zbLuaAPI.txt')
+      @api_client = APIClient.new(port_file: port_file)
       
       # Use provided test runner class or default
       runner_class = test_runner_class || TestRunner
@@ -22,9 +26,15 @@ module ZBTest
       # Launch game (if not already running)
       launch_game_if_needed
 
+      # Discover API port (from file if using random port)
+      api_client.discover_port(timeout: config['startup_timeout'])
+
       # Wait for API to be ready
       api_client.wait_for_ready(timeout: config['startup_timeout'])
       puts "\n✓ API ready\n"
+
+      # Wait for player to spawn
+      api_client.wait_for_player(timeout: config['startup_timeout'])
 
       # Run all tests
       puts "\n🧪 Running Test Suite"

@@ -63,19 +63,22 @@ module ZBTest
       game_exe = find_executable
 
       args = [game_exe]
-      args << "-javaagent:ZombieBuddy.jar=lua_server_port=#{config['api_port']}"
+      args << "-javaagent:ZombieBuddy.jar=lua_server_port=random"
       args << '--'
       args << '-Dzomboid' if mac?
       cache_dir = File.expand_path(config['cache_dir'] || './tmp/cache')
       init_cachedir(cache_dir)
 
       args << "-cachedir=#{cache_dir}"
-      # args << "-modfolders" << File.join(ZBTest.root, 'mods')
       
       args.concat(['-novoip', '-nosound', '-nosteam', '-no-worldgen', '-no-foraging', '-no-attachments'])
       args << '-server' if config['server_mode']
       args << '-debug' if config['debug']
       args
+    end
+
+    def get_cache_dir
+      File.expand_path(config['cache_dir'] || './tmp/cache')
     end
 
     def init_cachedir(cache_dir)

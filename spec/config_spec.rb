@@ -2,6 +2,7 @@
 
 require 'zbtest'
 require 'rspec'
+require 'tempfile'
 
 RSpec.describe ZBTest::Config do
   describe 'COMMON_GAME_PATHS' do
