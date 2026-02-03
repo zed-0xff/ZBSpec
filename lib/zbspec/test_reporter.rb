@@ -51,7 +51,7 @@ module ZBSpec
       puts "#{BOLD}Summary:#{RESET}"
       puts "  Total:  #{results.total_count}"
       puts "  #{GREEN}Passed: #{results.passed_count}#{RESET}"
-      puts "  #{RED}Failed: #{results.failed_count}#{RESET}"
+      puts "  #{RED}Failed: #{results.failed_count}#{RESET}" if results.failed_count > 0
 
       if results.passed?
         puts "\n#{GREEN}#{BOLD}✓ All tests passed!#{RESET}"
