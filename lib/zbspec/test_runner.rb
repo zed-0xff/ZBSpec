@@ -60,6 +60,9 @@ module ZBSpec
           next
         end
         
+        # Remember log position before test
+        log_pos_before = log_file_size
+        
         # Read and execute the spec file
         lua_code = File.read(spec_file)
         
@@ -69,13 +72,53 @@ module ZBSpec
           
           # Spec files should return true on success, false or error on failure
           passed = result == true || result == 'true'
-          tests << test(spec_file, passed, error: passed ? nil : "Spec returned: #{result.inspect}")
+          if passed
+            tests << test(spec_file, true)
+          else
+            error_msg = "Spec returned: #{result.inspect}"
+            log_tail = read_log_since(log_pos_before)
+            error_msg += "\n\n    Log during test:\n#{log_tail}" if log_tail
+            tests << test(spec_file, false, error: error_msg)
+          end
         rescue StandardError => e
-          tests << test(spec_file, false, error: e.message)
+          error_msg = e.message
+          log_tail = read_log_since(log_pos_before)
+          error_msg += "\n\n    Log during test:\n#{log_tail}" if log_tail
+          tests << test(spec_file, false, error: error_msg)
         end
       end
       
       tests
+    end
+
+    def log_path
+      @log_path ||= File.join(config['tmp_dir'] || 'tmp', 'logs', 'last.log')
+    end
+
+    def log_file_size
+      return 0 unless File.exist?(log_path)
+      File.size(log_path)
+    rescue StandardError
+      0
+    end
+
+    # Read log content added since given position
+    def read_log_since(pos)
+      return nil unless File.exist?(log_path)
+      
+      current_size = File.size(log_path)
+      return nil if current_size <= pos
+      
+      File.open(log_path, 'r') do |f|
+        f.seek(pos)
+        content = f.read
+        return nil if content.nil? || content.strip.empty?
+        
+        lines = content.lines.map { |line| "      #{line.rstrip}" }
+        lines.join("\n")
+      end
+    rescue StandardError
+      nil
     end
 
     # Helper to create a test case
