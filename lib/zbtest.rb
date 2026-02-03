@@ -15,6 +15,10 @@ module ZBTest
   class ConfigError < Error; end
   class APIError < Error; end
   class GameLaunchError < Error; end
+
+  def self.root
+    File.expand_path('..', __dir__)
+  end
 end
 
 # Load all components

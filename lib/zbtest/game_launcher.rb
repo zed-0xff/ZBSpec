@@ -70,6 +70,7 @@ module ZBTest
       init_cachedir(cache_dir)
 
       args << "-cachedir=#{cache_dir}"
+      # args << "-modfolders" << File.join(ZBTest.root, 'mods')
       
       args.concat(['-novoip', '-nosound', '-nosteam', '-no-worldgen', '-no-foraging', '-no-attachments'])
       args << '-server' if config['server_mode']
@@ -80,9 +81,13 @@ module ZBTest
     def init_cachedir(cache_dir)
       mods_dir = File.join(cache_dir, 'mods')
       FileUtils.mkdir_p(mods_dir)
-      FileUtils.cp(File.join(__dir__, '../../config/default_options.ini'), File.join(cache_dir, 'options.ini'))
+      Dir[File.join(__dir__, '../../config/*.ini')].each do |ini_fname|
+        FileUtils.cp(ini_fname, cache_dir)
+      end
       FileUtils.touch(File.join(mods_dir, 'reset-mods-42_00.txt'))
-      FileUtils.ln_sf(File.expand_path(Dir.pwd), File.join(mods_dir, 'this'))
+
+      FileUtils.ln_sf(File.expand_path(Dir.pwd),                File.join(mods_dir, 'this'))
+      FileUtils.ln_sf(File.join(ZBTest.root, 'mods', 'ZBTest'), File.join(mods_dir, 'ZBTest'))
 
       default_txt = []
       default_txt << "VERSION = 1,"
@@ -97,19 +102,17 @@ module ZBTest
 
     def build_mod_list
       mods = []
-      
-      # Always include ZombieBuddy first (required for API)
       mods << 'ZombieBuddy'
+      mods << 'ZBTest'
       
       # Add user mods
       if config['mods']&.any?
         config['mods'].each do |mod|
-          # Skip if ZombieBuddy already added
-          mods << mod unless mod == 'ZombieBuddy'
+          mods << mod
         end
       end
       
-      mods
+      mods.uniq
     end
 
     def find_executable
