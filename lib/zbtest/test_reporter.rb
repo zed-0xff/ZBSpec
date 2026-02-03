@@ -10,10 +10,11 @@ module ZBTest
     CYAN = "\e[36m"
     BOLD = "\e[1m"
 
-    attr_reader :results
+    attr_reader :results, :verbose
 
-    def initialize(results)
+    def initialize(results, verbose: false)
       @results = results
+      @verbose = verbose
     end
 
     def display
@@ -21,6 +22,9 @@ module ZBTest
       puts '=' * 50
 
       results.sections.each do |section_name, test_cases|
+        # Skip Health Check section unless verbose
+        next if section_name == 'Health Check' && !verbose
+        
         display_section(section_name, test_cases)
       end
 

@@ -3,11 +3,12 @@
 module ZBTest
   # Main test harness orchestrator
   class Harness
-    attr_reader :config, :launcher, :api_client, :test_runner
+    attr_reader :config, :launcher, :api_client, :test_runner, :verbose
 
-    def initialize(config_path: nil, test_runner_class: nil)
+    def initialize(config_path: nil, test_runner_class: nil, test_files: nil, verbose: false)
       @config = Config.new(config_path)
       @launcher = GameLauncher.new(@config)
+      @verbose = verbose
       
       # Create API client with port file path for discovery
       cache_dir = File.expand_path(@config['cache_dir'] || './tmp/cache')
@@ -16,7 +17,7 @@ module ZBTest
       
       # Use provided test runner class or default
       runner_class = test_runner_class || TestRunner
-      @test_runner = runner_class.new(@api_client, @config)
+      @test_runner = runner_class.new(@api_client, @config, test_files: test_files)
     end
 
     def run
@@ -42,7 +43,7 @@ module ZBTest
       results = test_runner.run_all
 
       # Report results
-      reporter = TestReporter.new(results)
+      reporter = TestReporter.new(results, verbose: verbose)
       reporter.display
 
       # Shutdown (if configured)

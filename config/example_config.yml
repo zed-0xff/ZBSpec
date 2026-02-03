@@ -13,6 +13,9 @@ game_path: /Applications/Project Zomboid.app
 server_mode: false
 debug: true
 
+# Test file discovery pattern (glob)
+test_glob: test/**/*_test.lua
+
 # Mods to load
 # Note: ZombieBuddy and ZBTest are automatically included
 mods:

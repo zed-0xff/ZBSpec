@@ -21,7 +21,8 @@ module ZBTest
       'game_path' => nil,  # Auto-detect by default
       'server_mode' => false,
       'debug' => true,
-      'mods' => []
+      'mods' => [],
+      'test_glob' => 'test/**/*_test.lua'
     }.freeze
 
     attr_reader :data

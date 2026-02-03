@@ -17,16 +17,21 @@ module ZBTest
       sections.values.flatten
     end
 
+    # Get all tests excluding health checks
+    def test_tests
+      sections.reject { |name, _| name == 'Health Check' }.values.flatten
+    end
+
     def passed_count
-      all_tests.count(&:passed?)
+      test_tests.count(&:passed?)
     end
 
     def failed_count
-      all_tests.count(&:failed?)
+      test_tests.count(&:failed?)
     end
 
     def total_count
-      all_tests.count
+      test_tests.count
     end
 
     def passed?

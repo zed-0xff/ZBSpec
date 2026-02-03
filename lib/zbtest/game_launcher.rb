@@ -33,20 +33,27 @@ module ZBTest
         return
       end
 
+      # Clean up stale port file from previous session
+      clean_port_file
+
       puts '🎮 Launching Project Zomboid...'
 
       # Prepare launch arguments
       args = build_launch_args
 
-      # Launch game in background
+      # Setup log file for game output
+      log_file = setup_log_file
+
+      # Launch game in background with redirected output
       puts "Launching game with args: #{args.inspect}"
-      @pid = spawn(*args)
+      @pid = spawn(*args, out: log_file, err: log_file)
       @running = true
 
       # Write PID file
       write_pid_file
 
       puts "  PID: #{@pid}"
+      puts "  Log: #{log_file}"
       puts "  Mods: #{config['mods'].join(', ')}" if config['mods']
       puts '  Waiting for startup...'
     rescue StandardError => e
@@ -93,6 +100,29 @@ module ZBTest
       puts "  PID file: #{File.expand_path(@pid_file)}"
     end
 
+    def clean_port_file
+      cache_dir = File.expand_path(config['cache_dir'] || './tmp/cache')
+      port_file = File.join(cache_dir, 'zbLuaAPI.txt')
+      
+      if File.exist?(port_file)
+        File.delete(port_file)
+        puts "  Cleaned stale port file: #{port_file}"
+      end
+    end
+
+    def setup_log_file
+      FileUtils.mkdir_p('tmp/logs')
+      timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
+      log_file = File.expand_path("tmp/logs/#{timestamp}.log")
+      
+      # Create symlink to latest log
+      latest_link = File.expand_path('tmp/logs/last.log')
+      File.delete(latest_link) if File.exist?(latest_link)
+      File.symlink(log_file, latest_link)
+      
+      log_file
+    end
+
     def build_launch_args
       game_exe = find_executable
 
@@ -123,8 +153,8 @@ module ZBTest
       end
       FileUtils.touch(File.join(mods_dir, 'reset-mods-42_00.txt'))
 
-      FileUtils.ln_sf(File.expand_path(Dir.pwd),                File.join(mods_dir, 'this'))   unless File.exist?(File.join(mods_dir, 'this'))
-      FileUtils.ln_sf(File.join(ZBTest.root, 'mods', 'ZBTest'), File.join(mods_dir, 'ZBTest')) unless File.exist?(File.join(mods_dir, 'ZBTest'))
+      FileUtils.ln_sf(File.expand_path(Dir.pwd),                File.join(mods_dir, 'this'))
+      FileUtils.ln_sf(File.join(ZBTest.root, 'mods', 'ZBTest'), File.join(mods_dir, 'ZBTest'))
 
       default_txt = []
       default_txt << "VERSION = 1,"

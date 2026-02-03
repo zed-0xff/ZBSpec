@@ -23,6 +23,9 @@ server_mode: false
 # Enable debug mode
 debug: true
 
+# Test file discovery pattern (glob)
+test_glob: test/**/*_test.lua
+
 # Your mod(s) to test
 # Note: ZombieBuddy and ZBTest are automatically included
 mods:

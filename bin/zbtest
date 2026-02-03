@@ -9,14 +9,16 @@ require 'zbtest'
 
 # Parse command line options
 options = {
-  config: 'tests/zbtest.yml',  # Default config path
-  mod_dir: nil
+  config: 'test/zbtest.yml',  # Default config path
+  mod_dir: nil,
+  test_files: [],
+  verbose: false
 }
 
 OptionParser.new do |opts|
-  opts.banner = 'Usage: zbtest [options]'
+  opts.banner = 'Usage: zbtest [options] [test_files...]'
 
-  opts.on('-c', '--config PATH', 'Path to config file (default: tests/zbtest.yml)') do |path|
+  opts.on('-c', '--config PATH', 'Path to config file (default: test/zbtest.yml)') do |path|
     options[:config] = path
   end
 
@@ -24,22 +26,33 @@ OptionParser.new do |opts|
     options[:mod_dir] = path
   end
 
+  opts.on('-v', '--verbose', 'Show verbose output (including health checks)') do
+    options[:verbose] = true
+  end
+
   opts.on('-h', '--help', 'Show this help') do
     puts opts
+    puts "\nExamples:"
+    puts "  zbtest                              # Run all tests matching test_glob"
+    puts "  zbtest test/my_test.lua             # Run specific test file"
+    puts "  zbtest test/foo_test.lua test/bar_test.lua  # Run multiple files"
     exit
   end
 
-  opts.on('-v', '--version', 'Show version') do
+  opts.on('--version', 'Show version') do
     puts "ZBTest v#{ZBTest::VERSION}"
     exit
   end
 end.parse!
 
+# Remaining arguments are test files
+options[:test_files] = ARGV unless ARGV.empty?
+
 # Verify config file exists
 unless File.exist?(options[:config])
   abort "❌ Config file not found: #{options[:config]}\n" \
         "   Create it or specify with --config PATH\n" \
-        "   Example: ~/projects/zomboid/ZBTest/config/example.yml"
+        "   Example: test/zbtest.yml"
 end
 
 # Load mod-specific test runner if available
@@ -74,6 +87,8 @@ end
 FileUtils.mkdir_p('logs')
 harness = ZBTest::Harness.new(
   config_path: options[:config],
-  test_runner_class: test_runner_class
+  test_runner_class: test_runner_class,
+  test_files: options[:test_files].empty? ? nil : options[:test_files],
+  verbose: options[:verbose]
 )
 harness.run
