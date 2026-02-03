@@ -84,7 +84,6 @@ if options[:mod_dir]
 end
 
 # Run the harness
-FileUtils.mkdir_p('logs')
 harness = ZBSpec::Harness.new(
   config_path: options[:config],
   test_runner_class: test_runner_class,
