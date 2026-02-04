@@ -45,11 +45,11 @@ module ZBSpec
     # Determine the best mode based on available specs
     def recommended_mode
       if needs_server? && needs_client?
-        :mp
+        :both  # Run SP first, then MP
       elsif needs_server?
         :server
       else
-        :sp  # Default to singleplayer (client specs + shared run fine in SP)
+        :sp
       end
     end
 
@@ -58,8 +58,11 @@ module ZBSpec
       case context
       when :server
         @server_specs + @shared_specs
-      when :client, :sp
+      when :client
         @client_specs + @shared_specs
+      when :sp
+        # SP runs everything (it's both server and client)
+        @client_specs + @server_specs + @shared_specs
       else
         all_specs
       end

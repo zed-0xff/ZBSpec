@@ -3,12 +3,14 @@
 module ZBSpec
   # Represents a single test case result
   class TestCase
-    attr_reader :name, :passed, :error
+    attr_reader :name, :passed, :error, :test_name, :assertion_name
 
-    def initialize(name, passed, error: nil)
+    def initialize(name, passed, error: nil, test_name: nil, assertion_name: nil)
       @name = name
       @passed = passed
       @error = error
+      @test_name = test_name
+      @assertion_name = assertion_name
     end
 
     def passed?

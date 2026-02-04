@@ -10,11 +10,11 @@ module ZBSpec
     CYAN = "\e[36m"
     BOLD = "\e[1m"
 
-    attr_reader :results, :verbose
+    attr_reader :results, :verbosity
 
-    def initialize(results, verbose: false)
+    def initialize(results, verbosity: 0)
       @results = results
-      @verbose = verbose
+      @verbosity = verbosity
     end
 
     def display
@@ -22,9 +22,6 @@ module ZBSpec
       puts '=' * 50
 
       results.sections.each do |section_name, test_cases|
-        # Skip Health Check section unless verbose
-        next if section_name == 'Health Check' && !verbose
-        
         display_section(section_name, test_cases)
       end
 
@@ -42,7 +39,19 @@ module ZBSpec
 
       test_cases.each do |test|
         puts "  #{test.status_color}#{test.status_icon}#{RESET} #{test.name}"
-        puts "    #{YELLOW}Error: #{test.error}#{RESET}" if test.error
+        display_error_details(test) if test.error
+      end
+    end
+
+    def display_error_details(test)
+      if test.test_name || test.assertion_name
+        # Structured error display
+        puts "      #{test.test_name}" if test.test_name
+        puts "          assert.#{test.assertion_name}" if test.assertion_name
+        puts "              #{YELLOW}#{test.error}#{RESET}"
+      else
+        # Simple error display
+        puts "    #{YELLOW}Error: #{test.error}#{RESET}"
       end
     end
 

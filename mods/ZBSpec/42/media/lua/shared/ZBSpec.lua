@@ -143,7 +143,7 @@ ZBSpec.assert = {}
 
 function ZBSpec.assert.is_equal(expected, actual)
     if expected ~= actual then
-        error(string.format("expected %s, got %s", tostring(expected), tostring(actual)))
+        error(string.format("expected %s, got %s", tostring(expected), tostring(actual)), 2)
     end
 end
 
@@ -153,137 +153,128 @@ end
 
 function ZBSpec.assert.is_true(value, msg)
     if not value then
-        error(msg or "expected true, got false")
+        error(msg or "expected true, got false", 2)
     end
 end
 
 function ZBSpec.assert.is_false(value, msg)
     if value then
-        error(msg or "expected false, got true")
+        error(msg or "expected false, got true", 2)
     end
 end
 
 function ZBSpec.assert.is_nil(value)
     if value ~= nil then
-        error(string.format("expected nil, got %s", tostring(value)))
+        error(string.format("expected nil, got %s", tostring(value)), 2)
     end
 end
 
 function ZBSpec.assert.is_not_nil(value)
     if value == nil then
-        error("expected non-nil value")
+        error("expected non-nil value", 2)
     end
 end
 
 function ZBSpec.assert.is_table(value)
     if type(value) ~= "table" then
-        error(string.format("expected table, got %s", type(value)))
+        error(string.format("expected table, got %s", type(value)), 2)
     end
 end
 
 function ZBSpec.assert.is_number(value)
     if type(value) ~= "number" then
-        error(string.format("expected number, got %s", type(value)))
+        error(string.format("expected number, got %s", type(value)), 2)
     end
 end
 
 function ZBSpec.assert.is_string(value)
     if type(value) ~= "string" then
-        error(string.format("expected string, got %s", type(value)))
+        error(string.format("expected string, got %s", type(value)), 2)
     end
 end
 
 function ZBSpec.assert.is_function(value)
     if type(value) ~= "function" then
-        error(string.format("expected function, got %s", type(value)))
+        error(string.format("expected function, got %s", type(value)), 2)
     end
 end
 
 function ZBSpec.assert.is_boolean(value)
     if type(value) ~= "boolean" then
-        error(string.format("expected boolean, got %s", type(value)))
+        error(string.format("expected boolean, got %s", type(value)), 2)
     end
 end
 
 function ZBSpec.assert.greater_than(threshold, actual)
     if not (actual > threshold) then
-        error(string.format("expected %s > %s", tostring(actual), tostring(threshold)))
+        error(string.format("expected %s > %s", tostring(actual), tostring(threshold)), 2)
     end
 end
 
 function ZBSpec.assert.less_than(threshold, actual)
     if not (actual < threshold) then
-        error(string.format("expected %s < %s", tostring(actual), tostring(threshold)))
+        error(string.format("expected %s < %s", tostring(actual), tostring(threshold)), 2)
     end
 end
 
 function ZBSpec.assert.matches(pattern, str)
     if type(str) ~= "string" then
-        error(string.format("expected string, got %s", type(str)))
+        error(string.format("expected string, got %s", type(str)), 2)
     end
     if not string.match(str, pattern) then
-        error(string.format("'%s' does not match pattern '%s'", str, pattern))
+        error(string.format("'%s' does not match pattern '%s'", str, pattern), 2)
     end
 end
 
 function ZBSpec.assert.contains(needle, haystack)
     if type(haystack) == "string" then
         if not string.find(haystack, needle, 1, true) then
-            error(string.format("'%s' does not contain '%s'", haystack, needle))
+            error(string.format("'%s' does not contain '%s'", haystack, needle), 2)
         end
     elseif type(haystack) == "table" then
         for _, v in pairs(haystack) do
             if v == needle then return end
         end
-        error(string.format("table does not contain %s", tostring(needle)))
+        error(string.format("table does not contain %s", tostring(needle)), 2)
     else
-        error(string.format("expected string or table, got %s", type(haystack)))
+        error(string.format("expected string or table, got %s", type(haystack)), 2)
     end
 end
 
 function ZBSpec.assert.has_key(key, tbl)
     if type(tbl) ~= "table" then
-        error(string.format("expected table, got %s", type(tbl)))
+        error(string.format("expected table, got %s", type(tbl)), 2)
     end
     if tbl[key] == nil then
-        error(string.format("table does not have key '%s'", tostring(key)))
+        error(string.format("table does not have key '%s'", tostring(key)), 2)
     end
 end
 
 function ZBSpec.assert.throws(fn, expected_msg)
     local ok, err = pcall(fn)
     if ok then
-        error("expected function to throw, but it did not")
+        error("expected function to throw, but it did not", 2)
     end
     if expected_msg and not string.find(tostring(err), expected_msg, 1, true) then
-        error(string.format("expected error containing '%s', got '%s'", expected_msg, tostring(err)))
+        error(string.format("expected error containing '%s', got '%s'", expected_msg, tostring(err)), 2)
     end
 end
 
--- Run all tests and return zbspec-compatible result
+-- Current test being run (for error context)
+ZBSpec.currentTest = nil
+
+-- Run all tests - no pcall, errors propagate with full info
 function ZBSpec.run()
-    errors = {}
-    local passed = 0
-    local failed = 0
-    
-    for _, t in ipairs(tests) do
-        local ok, err = pcall(t.fn)
-        if ok then
-            passed = passed + 1
-        else
-            failed = failed + 1
-            table.insert(errors, t.name .. ": " .. tostring(err))
-        end
-    end
-    
-    -- Reset for next run
+    local testList = tests
     tests = {}
     skipped = {}
     
-    -- Return simple result for backward compatibility
-    if #errors > 0 then
-        return table.concat(errors, "\n")
+    for _, t in ipairs(testList) do
+        ZBSpec.currentTest = t.name
+        t.fn()  -- Let errors propagate naturally
     end
+    
+    ZBSpec.currentTest = nil
     return true
 end
 

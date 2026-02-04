@@ -3,25 +3,31 @@
 module ZBSpec
   # Main test harness orchestrator
   class Harness
-    attr_reader :config, :launcher, :api_client, :test_runner, :verbose
+    attr_reader :config, :launcher, :api_client, :test_runner, :verbosity
 
-    def initialize(config_path: nil, test_runner_class: nil, spec_files: nil, verbose: false, config_overrides: {})
+    def initialize(config_path: nil, test_runner_class: nil, spec_files: nil, verbosity: 0, config_overrides: {})
       @config = Config.new(config_path)
       config_overrides.each { |k, v| @config[k] = v }
       @launcher = GameLauncher.new(@config)
-      @verbose = verbose
+      @verbosity = verbosity
       
       # Create API client with port file path for discovery
       # Use the same cache dir logic as the launcher
       port_file = File.join(@launcher.get_cache_dir, 'zbLuaAPI.txt')
-      @api_client = APIClient.new(port_file: port_file)
+      label = @config['server_mode'] ? 'server' : 'sp'
+      @api_client = APIClient.new(port_file: port_file, label: label)
       
       # Use provided test runner class or default
       runner_class = test_runner_class || TestRunner
-      @test_runner = runner_class.new(@api_client, @config, spec_files: spec_files)
+      @test_runner = runner_class.new(@api_client, @config, spec_files: spec_files, verbosity: verbosity)
     end
 
     def run
+      results = run_without_exit
+      exit(results.failed? ? 1 : 0)
+    end
+
+    def run_without_exit
       puts '🚀 PZ Spec Harness Starting'
       puts '=' * 50
 
@@ -33,10 +39,25 @@ module ZBSpec
 
       # Wait for API to be ready
       api_client.wait_for_ready(timeout: startup_timeout)
-      puts "\n✓ API ready\n"
-
-      # Wait for player to spawn (skip for server mode)
-      unless config['server_mode']
+      
+      # Sanity check: verify instance is running in expected mode
+      if config['server_mode']
+        is_server = api_client.execute('return isServer()')
+        raise "Instance should be server but isServer()=#{is_server}" unless is_server
+        puts "\n✓ API ready (isServer=true)\n"
+      elsif config['server_ip']
+        is_client = api_client.execute('return isClient()')
+        raise "Instance should be client but isClient()=#{is_client}" unless is_client
+        puts "\n✓ API ready (isClient=true)\n"
+        api_client.wait_for_player(timeout: startup_timeout)
+      else
+        # SP mode: should be neither client nor server
+        is_client = api_client.execute('return isClient()')
+        is_server = api_client.execute('return isServer()')
+        if is_client || is_server
+          raise "SP instance should be neither client nor server, but isClient=#{is_client}, isServer=#{is_server}"
+        end
+        puts "\n✓ API ready (SP mode)\n"
         api_client.wait_for_player(timeout: startup_timeout)
       end
 
@@ -46,13 +67,13 @@ module ZBSpec
       results = test_runner.run_all
 
       # Report results
-      reporter = TestReporter.new(results, verbose: verbose)
+      reporter = TestReporter.new(results, verbosity: verbosity)
       reporter.display
 
       # Shutdown (if configured)
       launcher.stop if config['auto_shutdown']
 
-      exit(results.failed? ? 1 : 0)
+      results
     rescue StandardError => e
       handle_error(e)
     end

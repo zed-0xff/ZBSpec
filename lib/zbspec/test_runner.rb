@@ -3,22 +3,26 @@
 module ZBSpec
   # Base test runner - extend this for mod-specific tests
   class TestRunner
-    attr_reader :api_client, :config, :mod_namespace, :spec_files
+    attr_reader :api_client, :config, :mod_namespace, :spec_files, :verbosity
 
-    def initialize(api_client, config, mod_namespace: nil, spec_files: nil)
+    def initialize(api_client, config, mod_namespace: nil, spec_files: nil, verbosity: 0)
       @api_client = api_client
       @config = config
       @mod_namespace = mod_namespace
       @spec_files = spec_files || discover_spec_files
+      @verbosity = verbosity
     end
 
     # Override this in subclass to define mod-specific tests
     def run_all
       results = TestResults.new
 
-      # Health check (always run)
+      # Health check (run silently, fail fast if not ready)
       health = api_client.health_check
-      results.add_section('Health Check', run_health_check(health))
+      unless health[:api_responding]
+        results.add_section('Specs', [test('API not responding', false, error: 'Game API not available')])
+        return results
+      end
 
       # Only continue if mod loaded
       if mod_namespace && !mod_loaded?
@@ -27,7 +31,7 @@ module ZBSpec
 
       # Run Lua spec files
       if @spec_files.any?
-        results.add_section('Lua Specs', run_lua_specs)
+        results.add_section('Specs', run_lua_specs)
       end
 
       results
@@ -67,24 +71,42 @@ module ZBSpec
         lua_code = File.read(spec_file)
         
         begin
-          # Execute the spec file in the game
-          result = api_client.execute(lua_code)
+          # Execute the spec file in the game (pass filename for better error messages)
+          result = api_client.execute(lua_code, chunkname: spec_file)
           
-          # Spec files should return true on success, false or error on failure
-          passed = result == true || result == 'true'
-          if passed
+          # Log raw response if verbosity >= 2
+          if verbosity >= 2
+            puts "    [raw] #{spec_file}:\n#{result}"
+          end
+          
+          # Spec files should return true on success
+          if result == true || result == 'true'
             tests << test(spec_file, true)
           else
-            error_msg = "Spec returned: #{result.inspect}"
-            log_tail = read_log_since(log_pos_before)
-            error_msg += "\n\n    Log during test:\n#{log_tail}" if log_tail
-            tests << test(spec_file, false, error: error_msg)
+            tests << test(spec_file, false, error: result.to_s)
           end
+        rescue ZBSpec::APIClient::LuaError => e
+          # Log raw error if verbosity >= 2
+          if verbosity >= 2
+            puts "    [raw] #{spec_file} error:"
+            if e.raw_error.is_a?(String) && e.raw_error.start_with?('{') && e.raw_error.end_with?('}')
+              begin
+                pp JSON.parse(e.raw_error)
+              rescue JSON::ParserError
+                puts e.raw_error
+              end
+            else
+              p e.raw_error
+            end
+          end
+          # Lua execution error - include file:line if available
+          location = e.line ? "#{spec_file}:#{e.line}" : spec_file
+          tests << test(location, false, 
+                        error: e.error_message, 
+                        test_name: e.test_name, 
+                        assertion_name: e.assertion_name)
         rescue StandardError => e
-          error_msg = e.message
-          log_tail = read_log_since(log_pos_before)
-          error_msg += "\n\n    Log during test:\n#{log_tail}" if log_tail
-          tests << test(spec_file, false, error: error_msg)
+          tests << test(spec_file, false, error: "#{e.class}: #{e.message}")
         end
       end
       
@@ -122,8 +144,8 @@ module ZBSpec
     end
 
     # Helper to create a test case
-    def test(name, passed, error: nil)
-      TestCase.new(name, passed, error: error)
+    def test(name, passed, error: nil, test_name: nil, assertion_name: nil)
+      TestCase.new(name, passed, error: error, test_name: test_name, assertion_name: assertion_name)
     end
 
     # Check if mod is loaded

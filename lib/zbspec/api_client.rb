@@ -4,13 +4,15 @@ module ZBSpec
   # API client for communicating with ZombieBuddy
   class APIClient
     API_TIMEOUT = 5
+    LABEL_WIDTH = 8  # "[server] " width
 
-    attr_reader :port, :base_uri, :host
+    attr_reader :port, :base_uri, :host, :label
 
-    def initialize(port: nil, host: '127.0.0.1', port_file: nil)
+    def initialize(port: nil, host: '127.0.0.1', port_file: nil, label: nil)
       @port = port
       @host = host
       @port_file = port_file
+      @label = label
       @base_uri = port ? URI("http://#{host}:#{port}/lua") : nil
     end
 
@@ -18,7 +20,7 @@ module ZBSpec
     def discover_port(timeout: 120)
       return if @port && @base_uri # Port already set
       
-      puts "🔍 Discovering API port from #{@port_file}..."
+      log "🔍 Discovering API port..."
       
       Timeout.timeout(timeout) do
         loop do
@@ -27,7 +29,7 @@ module ZBSpec
             if !port_str.empty? && port_str =~ /^\d+$/
               @port = port_str.to_i
               @base_uri = URI("http://#{@host}:#{@port}/lua")
-              puts "✓ Discovered API port: #{@port}"
+              log "✓ Discovered API port: #{@port}"
               return @port
             end
           end
@@ -42,7 +44,7 @@ module ZBSpec
 
     # Wait for API to become ready
     def wait_for_ready(timeout: 120)
-      puts "⏳ Waiting for API on #{host}:#{port}..."
+      log "⏳ Waiting for API..."
 
       Timeout.timeout(timeout) do
         loop do
@@ -64,11 +66,18 @@ module ZBSpec
     end
 
     # Execute Lua code in the game
-    def execute(lua_code, depth: 5)
+    def execute(lua_code, depth: 5, chunkname: nil)
       uri = base_uri.dup
-      uri.query = "depth=#{depth}"
+      params = ["depth=#{depth}"]
+      params << "chunkname=#{URI.encode_www_form_component(chunkname)}" if chunkname
+      uri.query = params.join('&')
 
       response = Net::HTTP.post(uri, lua_code, 'Content-Type' => 'text/plain')
+
+      # Handle error responses (500)
+      if response.code == '500'
+        raise LuaError.new(response.body)
+      end
 
       return nil unless response.is_a?(Net::HTTPSuccess)
 
@@ -77,15 +86,89 @@ module ZBSpec
       nil
     end
 
+    # Custom error class for Lua execution errors
+    class LuaError < StandardError
+      attr_reader :raw_error, :error_message, :file, :line, :lua_return
+      attr_reader :test_name, :assertion_name
+
+      def initialize(raw_error)
+        @raw_error = raw_error
+        parse_error(raw_error)
+        super(@error_message)
+      end
+
+      private
+
+      def parse_error(raw)
+        # Try to parse as JSON first
+        begin
+          data = JSON.parse(raw)
+          @lua_return = data['luaReturn']
+          
+          if @lua_return
+            # Extract best error message from luaReturn fields
+            @error_message = extract_message_from_lua_return(@lua_return)
+            extract_location_from_lua_return(@lua_return)
+          elsif data['error']
+            @error_message = data['error']
+          else
+            @error_message = raw
+          end
+          return
+        rescue JSON::ParserError
+          # Not JSON, parse as plain text
+        end
+        
+        # Plain text error parsing
+        @error_message = raw.to_s
+      end
+
+      def extract_message_from_lua_return(lr)
+        # kahluaErrors is now an array - first element has the exception message
+        if lr['kahluaErrors'].is_a?(Array) && !lr['kahluaErrors'].empty?
+          msg = lr['kahluaErrors'].first
+          # Extract message after "Exception: "
+          if msg =~ /Exception:\s*(.+?)(\n|$)/
+            return $1.strip
+          end
+          return msg.split("\n").first
+        end
+        lr['errorString'] || lr['errorObject'] || 'Unknown Lua error'
+      end
+
+      # Parse stack trace like:
+      #  "function: greater_than -- file: ZBSpec.lua line # 210 | MOD: ZBSpec\n" +
+      #  "function: grants Science XP when reading science book -- file: ./spec/client/book_xp_spec.lua line # 51 | Vanilla\n" +
+      #  "function: run -- file: ZBSpec.lua line # 274 | MOD: ZBSpec"
+      def extract_location_from_lua_return(lr)
+        text = [lr['kahluaErrors']].flatten.compact.join("\n")
+        
+        # Extract all "function: name -- file: path line # N" entries
+        entries = text.scan(/function:\s*(.+?)\s+--\s+file:\s*(\S+)\s+line\s*#\s*(\d+)/)
+        
+        entries.each do |name, file, line|
+          if file.end_with?('_spec.lua')
+            # This is the test function
+            @test_name = name
+            @file = file
+            @line = line.to_i
+          elsif file.end_with?('ZBSpec.lua') && name != 'run'
+            # This is the assertion function (e.g., greater_than, is_equal)
+            @assertion_name ||= name
+          end
+        end
+      end
+    end
+
     # Wait for player to be available
     def wait_for_player(timeout: 120)
-      puts "⏳ Waiting for player to spawn..."
+      log "⏳ Waiting for player to spawn..."
 
       Timeout.timeout(timeout) do
         loop do
           player = execute('return getPlayer() ~= nil')
           if player
-            puts "\n✓ Player spawned"
+            log "✓ Player spawned"
             return true
           end
 
@@ -107,6 +190,11 @@ module ZBSpec
     end
 
     private
+
+    def log(msg)
+      prefix = @label ? "[#{@label.ljust(6)}] " : ""
+      puts "#{prefix}#{msg}"
+    end
 
     def parse_response(body)
       JSON.parse(body)

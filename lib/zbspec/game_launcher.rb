@@ -4,40 +4,48 @@ require 'fileutils'
 module ZBSpec
   # Handles launching and stopping the game
   class GameLauncher
-    attr_reader :config, :pid
+    LABEL_WIDTH = 8
+    attr_reader :config, :pid, :label
 
-    def initialize(config)
+    def initialize(config, label: nil)
       @config = config
+      @label = label || (config['server_mode'] ? 'server' : 'sp')
       @pid = nil
       @running = false
-      instance_name = config['instance_name'] || 'default'
-      @pid_file = File.join('tmp', "zbspec_#{instance_name}.pid")
+    end
+
+    def log(msg)
+      puts "[#{@label.ljust(6)}] #{msg}"
+    end
+
+    def pid_file
+      @pid_file ||= File.join(get_cache_dir, 'pz.pid')
     end
 
     def start
       # Check for existing PID file
-      if File.exist?(@pid_file)
-        existing_pid = File.read(@pid_file).strip.to_i
+      if File.exist?(pid_file)
+        existing_pid = File.read(pid_file).strip.to_i
         if process_alive?(existing_pid)
-          puts "✓ Game already running (PID: #{existing_pid})"
+          log "✓ Game already running (PID: #{existing_pid})"
           @pid = existing_pid
           @running = true
           return
         else
-          puts "⚠️  Stale PID file found, removing..."
-          File.delete(@pid_file)
+          log "⚠️  Stale PID file found, removing..."
+          File.delete(pid_file)
         end
       end
 
       if running?
-        puts '✓ Game already running'
+        log '✓ Game already running'
         return
       end
 
       # Clean up stale port file from previous session
       clean_port_file
 
-      puts '🎮 Launching Project Zomboid...'
+      log '🎮 Launching Project Zomboid...'
 
       # Prepare launch arguments
       args = build_launch_args
@@ -45,13 +53,9 @@ module ZBSpec
       # Setup log file for game output
       log_file = setup_log_file
 
-      # Launch game in background
+      # Launch game in background, redirect stdout and stderr to log
       puts "Launching game with args: #{args.inspect}"
-      if config['server_mode']
-        @pid = spawn(*args)
-      else
-        @pid = spawn(*args, out: log_file)
-      end
+      @pid = spawn(*args, out: log_file, err: log_file)
       @running = true
 
       # Write PID file
@@ -75,11 +79,11 @@ module ZBSpec
       @pid = nil
       
       # Remove PID file
-      File.delete(@pid_file) if File.exist?(@pid_file)
+      File.delete(pid_file) if File.exist?(pid_file)
     rescue Errno::ESRCH
       # Process already dead
       @running = false
-      File.delete(@pid_file) if File.exist?(@pid_file)
+      File.delete(pid_file) if File.exist?(pid_file)
     end
 
     def running?
@@ -104,9 +108,9 @@ module ZBSpec
     end
 
     def write_pid_file
-      FileUtils.mkdir_p('tmp')
-      File.write(@pid_file, @pid.to_s)
-      puts "  PID file: #{File.expand_path(@pid_file)}"
+      FileUtils.mkdir_p(get_cache_dir)
+      File.write(pid_file, @pid.to_s)
+      puts "  PID file: #{File.expand_path(pid_file)}"
     end
 
     def clean_port_file
@@ -121,13 +125,14 @@ module ZBSpec
 
     def setup_log_file
       FileUtils.mkdir_p('tmp/logs')
+      instance = config['instance_name'] || 'default'
       timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
-      log_file = File.expand_path("tmp/logs/#{timestamp}.log")
+      log_file = File.expand_path("tmp/logs/#{instance}_#{timestamp}.log")
       
-      # Create symlink to latest log
-      latest_link = File.expand_path('tmp/logs/last.log')
-      File.delete(latest_link) if File.exist?(latest_link) || File.symlink?(latest_link)
-      File.symlink(File.basename(log_file), latest_link)
+      # Create symlink to latest log for this instance
+      latest_link = File.expand_path("tmp/logs/#{instance}.log")
+      FileUtils.rm_f(latest_link)
+      FileUtils.ln_sf(File.basename(log_file), latest_link)
       
       log_file
     end
@@ -162,14 +167,20 @@ module ZBSpec
         args.concat(['-novoip', '-nosound', '-nosteam', '-no-worldgen', '-no-foraging', '-no-attachments'])
         
         if config['server_ip']
-          # Client connecting to server
-          args << "-ip=#{config['server_ip']}"
-          args << "-port=#{config['server_port'] || 16261}"
-          args << "-user=#{config['username'] || 'ZBSpecPlayer'}"
-          args << "-password=#{config['password'] || ''}"
+          # Client connecting to server (+connect and value are separate args)
+          ip = config['server_ip']
+          port = config['server_port'] || 16261
+          password = config['password'] || ''
+          args << '+connect'
+          args << "#{ip}:#{port}"
+          unless password.empty?
+            args << '+password'
+            args << password
+          end
+        else
+          # SP only - debug mode
+          args << '-debug' if config['debug']
         end
-        
-        args << '-debug' if config['debug']
       end
       
       args

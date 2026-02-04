@@ -13,8 +13,9 @@ options = {
   config: 'spec/zbspec.yml',
   mod_dir: nil,
   spec_files: [],
-  verbose: false,
-  mode: :auto  # :auto, :sp, :server, :client, :mp
+  verbosity: 0,
+  mode: :auto,  # :auto, :sp, :server, :client, :mp
+  interactive: false
 }
 
 OptionParser.new do |opts|
@@ -28,8 +29,8 @@ OptionParser.new do |opts|
     options[:mod_dir] = path
   end
 
-  opts.on('-v', '--verbose', 'Show verbose output (including health checks)') do
-    options[:verbose] = true
+  opts.on('-v', '--verbose', 'Increase verbosity (can be repeated: -vvv)') do
+    options[:verbosity] += 1
   end
 
   opts.on('--sp', 'Run specs in singleplayer mode') do
@@ -52,6 +53,10 @@ OptionParser.new do |opts|
     options[:mode] = :stop
   end
 
+  opts.on('-i', '--interactive', 'Interactive Lua console (can combine with --sp/--client/--server)') do
+    options[:interactive] = true
+  end
+
   opts.on('-h', '--help', 'Show this help') do
     puts opts
     puts "\nSpec folder structure:"
@@ -60,17 +65,21 @@ OptionParser.new do |opts|
     puts "  spec/shared/*_spec.lua  - Shared specs (run on both)"
     puts "  spec/*_spec.lua         - Root specs (treated as shared)"
     puts "\nModes:"
-    puts "  (default)   Auto-detect based on spec folders"
-    puts "  --sp        Force singleplayer mode"
-    puts "  --server    Run server specs only"
-    puts "  --client    Run client specs only"
-    puts "  --mp        Run both server and client specs"
+    puts "  (default)   Auto-detect: SP + MP if server specs exist"
+    puts "  --sp        Singleplayer only"
+    puts "  --mp        Multiplayer only (server + client)"
+    puts "  --server    Dedicated server only"
+    puts "  --client    MP client only (auto-starts server)"
     puts "  --stop      Stop all running ZBSpec instances"
+    puts "  -i          Interactive Lua console"
     puts "\nExamples:"
     puts "  zbspec                    # Auto-detect mode from spec folders"
     puts "  zbspec --mp               # Force MP mode"
     puts "  zbspec --sp               # Force SP mode"
     puts "  zbspec --stop             # Stop all running instances"
+    puts "  zbspec -i                 # Interactive console (all instances)"
+    puts "  zbspec --client -i        # Interactive console (client only)"
+    puts "  zbspec --server -i        # Interactive console (server only)"
     puts "  zbspec spec/my_spec.lua   # Run specific spec file"
     exit
   end
@@ -114,6 +123,114 @@ if options[:mod_dir]
   end
 end
 
+# Handle interactive mode
+if options[:interactive]
+  puts "🔧 Interactive Lua Console"
+  puts "=" * 50
+  
+  # Determine which instances to connect to based on mode
+  cache_dirs = case options[:mode]
+               when :sp then ['tmp/cache_sp']
+               when :server then ['tmp/cache_server']
+               when :client then ['tmp/cache_client']
+               when :mp then ['tmp/cache_server', 'tmp/cache_client']
+               else %w[tmp/cache_sp tmp/cache_client tmp/cache_server]  # :auto - all
+               end
+  
+  clients = {}
+  
+  # First pass: discover all responding instances
+  cache_dirs.each do |cache_dir|
+    port_file = File.join(cache_dir, 'zbLuaAPI.txt')
+    next unless File.exist?(port_file)
+    
+    port = File.read(port_file).strip.to_i
+    next if port <= 0
+    
+    instance = File.basename(cache_dir).sub('cache_', '')
+    client = ZBSpec::APIClient.new(port: port)
+    
+    # Check if it's actually responding
+    clients[instance] = { client: client, port: port } if client.ready?
+  end
+  
+  # Calculate max instance name length for padding
+  max_len = clients.keys.map(&:length).max || 0
+  
+  # Print connected instances with padding
+  clients.each do |instance, data|
+    puts "  ✓ Connected to #{instance.ljust(max_len)} (port #{data[:port]})"
+  end
+  
+  # Replace hash values with just the clients
+  clients.transform_values! { |data| data[:client] }
+  
+  if clients.empty?
+    puts "\n❌ No running instances found. Start a game first with:"
+    puts "   zbspec --sp    # Singleplayer"
+    puts "   zbspec --mp    # Multiplayer"
+    exit 1
+  end
+  
+  puts "\nType Lua code to execute on all instances."
+  puts "Type 'exit' or press Ctrl+D/Ctrl+C to quit.\n\n"
+  
+  require 'readline'
+  
+  # History file
+  history_file = File.expand_path('~/.zbspec_history')
+  
+  # Load history from file
+  if File.exist?(history_file)
+    File.readlines(history_file).each do |line|
+      Readline::HISTORY.push(line.chomp)
+    end
+  end
+  
+  # Save history on exit
+  at_exit do
+    File.open(history_file, 'w') do |f|
+      Readline::HISTORY.to_a.last(1000).each { |line| f.puts(line) }
+    end
+  end
+  
+  trap('INT') { puts "\nBye!"; exit 0 }
+  
+  while (line = Readline.readline('lua> ', true))
+    line = line.strip
+    break if line == 'exit' || line == 'quit'
+    next if line.empty?
+    
+    # Don't add duplicate consecutive entries to history
+    if Readline::HISTORY.length > 1 && Readline::HISTORY[-2] == line
+      Readline::HISTORY.pop
+    end
+    
+    # Add implicit return if line has no semicolon and no return
+    lua_code = if !line.include?(';') && !line.match?(/\breturn\b/)
+                 "return #{line}"
+               else
+                 line
+               end
+    
+    clients.each do |instance, client|
+      begin
+        result = client.execute(lua_code)
+        if clients.size > 1
+          puts "[#{instance.ljust(max_len)}] #{result.inspect}"
+        else
+          puts result.inspect
+        end
+      rescue => e
+        puts "[#{instance.ljust(max_len)}] Error: #{e.message}"
+      end
+    end
+  end
+  
+  puts "Bye!"
+  exit 0
+end
+
 # Discover specs and determine mode
 discovery = ZBSpec::SpecDiscovery.new
 
@@ -127,6 +244,7 @@ end
 if options[:mode] == :auto
   options[:mode] = discovery.recommended_mode
   mode_reason = case options[:mode]
+                when :both then "running SP + MP"
                 when :mp then "server + client specs found"
                 when :server then "only server specs found"
                 else "no server specs found"
@@ -138,12 +256,35 @@ end
 FileUtils.mkdir_p('logs')
 
 case options[:mode]
+when :both
+  # Run SP first, then MP
+  puts "\n" + "=" * 50
+  puts "🎮 Phase 1: Singleplayer mode"
+  puts "=" * 50
+  spec_files = options[:spec_files].empty? ? discovery.specs_for(:sp) : options[:spec_files]
+  sp_harness = ZBSpec::Harness.new(
+    config_path: options[:config],
+    test_runner_class: test_runner_class,
+    spec_files: spec_files.empty? ? nil : spec_files,
+    verbosity: options[:verbosity]
+  )
+  sp_harness.run_without_exit
+  
+  puts "\n" + "=" * 50
+  puts "🎮 Phase 2: Multiplayer mode"
+  puts "=" * 50
+  mp_harness = ZBSpec::MPHarness.new(
+    config_path: options[:config],
+    spec_files: options[:spec_files].empty? ? nil : options[:spec_files],
+    verbosity: options[:verbosity]
+  )
+  mp_harness.run
 when :mp
   puts "\n🎮 Multiplayer mode: running specs on server and client"
   harness = ZBSpec::MPHarness.new(
     config_path: options[:config],
     spec_files: options[:spec_files].empty? ? nil : options[:spec_files],
-    verbose: options[:verbose]
+    verbosity: options[:verbosity]
   )
 when :server
   puts "\n🖥️  Server mode: running specs on dedicated server"
@@ -152,7 +293,7 @@ when :server
     config_path: options[:config],
     test_runner_class: test_runner_class,
     spec_files: spec_files.empty? ? nil : spec_files,
-    verbose: options[:verbose],
+    verbosity: options[:verbosity],
     config_overrides: { 'server_mode' => true }
   )
 when :client
@@ -161,50 +302,47 @@ when :client
   harness = ZBSpec::MPHarness.new(
     config_path: options[:config],
     spec_files: spec_files.empty? ? nil : spec_files,
-    verbose: options[:verbose],
+    verbosity: options[:verbosity],
     client_only: true
   )
 when :stop
   puts "🛑 Stopping all ZBSpec instances..."
-  pid_files = Dir.glob('tmp/zbspec_*.pid')
+  cache_dirs = %w[tmp/cache_sp tmp/cache_client tmp/cache_server]
+  found_any = false
   
-  if pid_files.empty?
-    puts "  No running instances found"
-  else
-    pid_files.each do |pid_file|
-      pid = File.read(pid_file).strip.to_i
-      instance = File.basename(pid_file, '.pid').sub('zbspec_', '')
-      
+  cache_dirs.each do |cache_dir|
+    pid_file = File.join(cache_dir, 'pz.pid')
+    next unless File.exist?(pid_file)
+    
+    found_any = true
+    pid = File.read(pid_file).strip.to_i
+    instance = File.basename(cache_dir)
+    
+    begin
+      Process.kill(0, pid)  # Check if process exists
+      puts "  Stopping #{instance} (PID: #{pid})..."
+      Process.kill('TERM', pid)
+      sleep 0.5
+      # Force kill if still running
       begin
-        Process.kill(0, pid)  # Check if process exists
-        puts "  Stopping #{instance} (PID: #{pid})..."
-        Process.kill('TERM', pid)
-        sleep 0.5
-        # Force kill if still running
-        begin
-          Process.kill(0, pid)
-          Process.kill('KILL', pid)
-        rescue Errno::ESRCH
-          # Already dead
-        end
-        puts "  ✓ Stopped #{instance}"
+        Process.kill(0, pid)
+        Process.kill('KILL', pid)
       rescue Errno::ESRCH
-        puts "  ⚠️  #{instance} already stopped (stale PID file)"
+        # Already dead
       end
-      
-      File.delete(pid_file)
+      puts "  ✓ Stopped #{instance}"
+    rescue Errno::ESRCH
+      puts "  ⚠️  #{instance} already stopped (stale PID file)"
     end
+    
+    File.delete(pid_file)
+    
+    # Also clean up port file
+    port_file = File.join(cache_dir, 'zbLuaAPI.txt')
+    File.delete(port_file) if File.exist?(port_file)
   end
   
-  # Also clean up port files
-  %w[cache_sp cache_client cache_server].each do |cache|
-    port_file = "tmp/#{cache}/zbLuaAPI.txt"
-    if File.exist?(port_file)
-      File.delete(port_file)
-      puts "  Cleaned #{port_file}"
-    end
-  end
-  
+  puts "  No running instances found" unless found_any
   puts "✓ Done"
   exit 0
 else
@@ -215,7 +353,7 @@ else
     config_path: options[:config],
     test_runner_class: test_runner_class,
     spec_files: spec_files.empty? ? nil : spec_files,
-    verbose: options[:verbose]
+    verbosity: options[:verbosity]
   )
 end
 
