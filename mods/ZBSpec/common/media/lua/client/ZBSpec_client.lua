@@ -1,19 +1,15 @@
-if debugScenarios == nil then
-    debugScenarios = {}
-end
-
 UIManager.setShowLuaDebuggerOnError(false)
 
-debugScenarios.DebugScenarioZBSpec = {
-    forceLaunch = true,
-    name = "ZBSpec",
-    world = "Muldraugh, KY",
-    startLoc = {x=8496, y=5789, z=0},
-    setSandbox = function()
-        SandboxVars.VehicleEasyUse = true;
-        SandboxVars.Zombies = 6;
-    end,
-    onStart = function()
-        UIManager.setShowLuaDebuggerOnError(false)
-    end
-}
+if WelcomeMessages and WelcomeMessages.doMsg then
+    Events.OnGameStart.Remove(WelcomeMessages.doMsg)
+end
+
+Events.OnGameStart.Add(function()
+    getPlayer():getModData().seenWelcome = true
+end)
+
+local core = getCore()
+if core and core.setOptionShowSurvivalGuide then
+    core:setOptionShowSurvivalGuide(false)
+end
+
