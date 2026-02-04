@@ -40,7 +40,7 @@ OptionParser.new do |opts|
     options[:mode] = :server
   end
 
-  opts.on('--client', 'Run specs on client only (connects to localhost)') do
+  opts.on('--client', 'Run specs on client only') do
     options[:mode] = :client
   end
 
@@ -63,7 +63,7 @@ OptionParser.new do |opts|
     puts "  (default)   Auto-detect based on spec folders"
     puts "  --sp        Force singleplayer mode"
     puts "  --server    Run server specs only"
-    puts "  --client    Run client specs only (server must be running)"
+    puts "  --client    Run client specs only"
     puts "  --mp        Run both server and client specs"
     puts "  --stop      Stop all running ZBSpec instances"
     puts "\nExamples:"
@@ -156,14 +156,13 @@ when :server
     config_overrides: { 'server_mode' => true }
   )
 when :client
-  puts "\n💻 Client mode: running specs on MP client"
+  puts "\n💻 Client mode: running specs on MP client (auto-starting server)"
   spec_files = options[:spec_files].empty? ? discovery.specs_for(:client) : options[:spec_files]
-  harness = ZBSpec::Harness.new(
+  harness = ZBSpec::MPHarness.new(
     config_path: options[:config],
-    test_runner_class: test_runner_class,
     spec_files: spec_files.empty? ? nil : spec_files,
     verbose: options[:verbose],
-    config_overrides: { 'server_ip' => '127.0.0.1' }
+    client_only: true
   )
 when :stop
   puts "🛑 Stopping all ZBSpec instances..."

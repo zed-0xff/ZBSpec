@@ -6,10 +6,11 @@ module ZBSpec
     attr_reader :config, :server_launcher, :client_launcher
     attr_reader :server_api, :client_api, :verbose
 
-    def initialize(config_path: nil, spec_files: nil, verbose: false)
+    def initialize(config_path: nil, spec_files: nil, verbose: false, client_only: false)
       @config = Config.new(config_path)
       @verbose = verbose
       @spec_files = spec_files
+      @client_only = client_only
       @discovery = SpecDiscovery.new
 
       # Create separate launchers for server and client
@@ -116,15 +117,17 @@ module ZBSpec
       server_specs = @spec_files || @discovery.specs_for(:server)
       client_specs = @spec_files || @discovery.specs_for(:client)
 
-      # Run specs on server
-      if server_specs.any?
-        puts "\n🧪 Running Server Specs (#{server_specs.length} files)"
-        puts '-' * 30
-        server_runner = TestRunner.new(@server_api, server_config, spec_files: server_specs)
-        server_results = server_runner.run_all
-        results.add_section('Server Specs', extract_tests(server_results))
-      else
-        puts "\n⏭️  No server specs to run"
+      # Run specs on server (unless client_only mode)
+      unless @client_only
+        if server_specs.any?
+          puts "\n🧪 Running Server Specs (#{server_specs.length} files)"
+          puts '-' * 30
+          server_runner = TestRunner.new(@server_api, server_config, spec_files: server_specs)
+          server_results = server_runner.run_all
+          results.add_section('Server Specs', extract_tests(server_results))
+        else
+          puts "\n⏭️  No server specs to run"
+        end
       end
 
       # Run specs on client
