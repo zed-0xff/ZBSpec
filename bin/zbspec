@@ -221,8 +221,19 @@ if options[:interactive]
         else
           puts result.inspect
         end
+      rescue ZBSpec::APIClient::LuaError => e
+        prefix = clients.size > 1 ? "[#{instance.ljust(max_len)}] " : ""
+        puts "#{prefix}Error: #{e.error_message}"
+        puts "#{prefix}  File: #{e.file}:#{e.line}" if e.file
+        puts "#{prefix}  Test: #{e.test_name}" if e.test_name
+        if options[:verbosity] >= 1 && e.lua_return
+          puts "#{prefix}  Raw:"
+          e.lua_return['kahluaErrors']&.each do |err|
+            err.each_line { |l| puts "#{prefix}    #{l.rstrip}" }
+          end
+        end
       rescue => e
-        puts "[#{instance.ljust(max_len)}] Error: #{e.message}"
+        puts "[#{instance.ljust(max_len)}] Error: #{e.class}: #{e.message}"
       end
     end
   end

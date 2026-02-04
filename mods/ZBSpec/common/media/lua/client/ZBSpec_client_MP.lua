@@ -10,7 +10,8 @@ function ServerConnectPopup:setVisible(visible)
     if conn_firstTime and visible then
         conn_firstTime = false
         orig_setVisible(self, true)
-        self.usernameEntry:setText("testuser")
+        self.usernameEntry:setText("admin")
+        self.passwordEntry:setText("zbspec")
         self:onOptionMouseDown(self.connectBtn)
         return
     end

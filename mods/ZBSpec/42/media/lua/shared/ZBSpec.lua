@@ -10,6 +10,7 @@ local errors = {}
 local currentDescribe = ""
 local skipCurrentBlock = false
 local skipReason = nil
+local beforeEachStack = {}  -- Stack of before_each functions for nested describes
 
 -- Context detection
 function ZBSpec.isClient()
@@ -49,11 +50,24 @@ function ZBSpec.describe(name, fn)
     local prevReason = skipReason
     
     currentDescribe = currentDescribe ~= "" and (currentDescribe .. " " .. name) or name
+    
+    -- Push new scope for before_each
+    table.insert(beforeEachStack, {})
+    
     fn()
+    
+    -- Pop the scope
+    table.remove(beforeEachStack)
     
     currentDescribe = prevDescribe
     skipCurrentBlock = prevSkip
     skipReason = prevReason
+end
+
+function ZBSpec.before_each(fn)
+    if #beforeEachStack > 0 then
+        table.insert(beforeEachStack[#beforeEachStack], fn)
+    end
 end
 
 function ZBSpec.it(name, fn)
@@ -62,7 +76,14 @@ function ZBSpec.it(name, fn)
     if skipCurrentBlock then
         table.insert(skipped, { name = fullName, reason = skipReason })
     else
-        table.insert(tests, { name = fullName, fn = fn })
+        -- Capture all current before_each functions (flattened)
+        local hooks = {}
+        for _, scope in ipairs(beforeEachStack) do
+            for _, hook in ipairs(scope) do
+                table.insert(hooks, hook)
+            end
+        end
+        table.insert(tests, { name = fullName, fn = fn, before_each = hooks })
     end
 end
 
@@ -271,6 +292,12 @@ function ZBSpec.run()
     
     for _, t in ipairs(testList) do
         ZBSpec.currentTest = t.name
+        -- Run before_each hooks
+        if t.before_each then
+            for _, hook in ipairs(t.before_each) do
+                hook()
+            end
+        end
         t.fn()  -- Let errors propagate naturally
     end
     
@@ -285,7 +312,15 @@ function ZBSpec.runDetailed()
     local failed = 0
     
     for _, t in ipairs(tests) do
-        local ok, err = pcall(t.fn)
+        local ok, err = pcall(function()
+            -- Run before_each hooks
+            if t.before_each then
+                for _, hook in ipairs(t.before_each) do
+                    hook()
+                end
+            end
+            t.fn()
+        end)
         if ok then
             passed = passed + 1
         else
@@ -318,6 +353,7 @@ function ZBSpec.reset()
     currentDescribe = ""
     skipCurrentBlock = false
     skipReason = nil
+    beforeEachStack = {}
 end
 
 -- Global aliases for convenience
@@ -327,5 +363,6 @@ it = ZBSpec.it
 test = ZBSpec.test
 assert = ZBSpec.assert
 pending = ZBSpec.pending
+before_each = ZBSpec.before_each
 
 return ZBSpec
