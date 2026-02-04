@@ -17,7 +17,7 @@ use_running_game: false
 # Path to Project Zomboid (for auto-launch)
 game_path: /Applications/Project Zomboid.app
 
-# Launch as server
+# Launch as server (use --server CLI flag instead)
 server_mode: false
 
 # Enable debug mode
@@ -30,3 +30,14 @@ spec_glob: spec/**/*_spec.lua
 # Note: ZombieBuddy and ZBSpec are automatically included
 mods:
   - YourModName
+
+# Multiplayer settings (for --mp and --client modes)
+# server_name: ZBSpecServer
+# server_ip: 127.0.0.1
+# server_port: 16261
+# username: ZBSpecPlayer
+# password: ""
+
+# Use existing running instances for MP testing
+# use_running_server: false
+# use_running_client: false

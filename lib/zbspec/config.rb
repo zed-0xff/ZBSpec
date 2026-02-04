@@ -15,7 +15,8 @@ module ZBSpec
 
     DEFAULT_CONFIG = {
       'api_port' => 4445,
-      'startup_timeout' => 120,
+      'startup_timeout' => 120,         # Client/SP startup timeout
+      'server_startup_timeout' => 60,   # Server startup timeout (faster)
       'auto_shutdown' => false,
       'use_running_game' => false,
       'game_path' => nil,  # Auto-detect by default
@@ -28,12 +29,13 @@ module ZBSpec
     attr_reader :data
 
     def initialize(config_path = nil)
-      unless config_path
-        raise ConfigError, 'Config path is required'
+      if config_path
+        @data = load_config(config_path)
+        detect_game_path if @data['game_path'].nil?
+      else
+        # Allow creating empty config for programmatic use
+        @data = DEFAULT_CONFIG.dup
       end
-
-      @data = load_config(config_path)
-      detect_game_path if @data['game_path'].nil?
     end
 
     def [](key)

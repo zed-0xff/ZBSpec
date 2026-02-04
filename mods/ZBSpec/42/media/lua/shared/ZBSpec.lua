@@ -1,22 +1,69 @@
 -- ZBSpec: Mini test framework for Project Zomboid mods
 -- Provides busted-like syntax: describe, it, assert
+-- Supports both client and server contexts
 
 ZBSpec = ZBSpec or {}
 
 local tests = {}
+local skipped = {}
 local errors = {}
 local currentDescribe = ""
+local skipCurrentBlock = false
+local skipReason = nil
 
+-- Context detection
+function ZBSpec.isClient()
+    return isClient and isClient()
+end
+
+function ZBSpec.isServer()
+    return isServer and isServer()
+end
+
+function ZBSpec.isMultiplayer()
+    return ZBSpec.isClient() or ZBSpec.isServer()
+end
+
+function ZBSpec.isSingleplayer()
+    return not ZBSpec.isMultiplayer()
+end
+
+function ZBSpec.hasPlayer()
+    return getPlayer and getPlayer() ~= nil
+end
+
+function ZBSpec.getContext()
+    if ZBSpec.isServer() then
+        return "server"
+    elseif ZBSpec.isClient() then
+        return "client"
+    else
+        return "singleplayer"
+    end
+end
+
+-- Core test functions
 function ZBSpec.describe(name, fn)
     local prevDescribe = currentDescribe
+    local prevSkip = skipCurrentBlock
+    local prevReason = skipReason
+    
     currentDescribe = currentDescribe ~= "" and (currentDescribe .. " " .. name) or name
     fn()
+    
     currentDescribe = prevDescribe
+    skipCurrentBlock = prevSkip
+    skipReason = prevReason
 end
 
 function ZBSpec.it(name, fn)
     local fullName = currentDescribe ~= "" and (currentDescribe .. " " .. name) or name
-    table.insert(tests, { name = fullName, fn = fn })
+    
+    if skipCurrentBlock then
+        table.insert(skipped, { name = fullName, reason = skipReason })
+    else
+        table.insert(tests, { name = fullName, fn = fn })
+    end
 end
 
 function ZBSpec.context(name, fn)
@@ -26,6 +73,70 @@ end
 function ZBSpec.test(name, fn)
     ZBSpec.it(name, fn)
 end
+
+-- Skip helpers
+function ZBSpec.skip(reason)
+    skipCurrentBlock = true
+    skipReason = reason or "skipped"
+end
+
+function ZBSpec.pending(name, fn)
+    local fullName = currentDescribe ~= "" and (currentDescribe .. " " .. name) or name
+    table.insert(skipped, { name = fullName, reason = "pending" })
+end
+
+-- Helper to create context-specific describe
+local function makeContextDescribe(shouldSkip, skipReasonFn)
+    return function(name, fn)
+        if shouldSkip() then
+            local prevSkip = skipCurrentBlock
+            local prevReason = skipReason
+            skipCurrentBlock = true
+            skipReason = skipReasonFn()
+            ZBSpec.describe(name, fn)
+            skipCurrentBlock = prevSkip
+            skipReason = prevReason
+        else
+            ZBSpec.describe(name, fn)
+        end
+    end
+end
+
+-- Context-specific namespaces
+ZBSpec.client = {
+    describe = makeContextDescribe(
+        function() return ZBSpec.isServer() end,
+        function() return "client only (running on server)" end
+    )
+}
+
+ZBSpec.server = {
+    describe = makeContextDescribe(
+        function() return ZBSpec.isClient() or ZBSpec.isSingleplayer() end,
+        function() return "server only (running on " .. ZBSpec.getContext() .. ")" end
+    )
+}
+
+ZBSpec.player = {
+    describe = makeContextDescribe(
+        function() return not ZBSpec.hasPlayer() end,
+        function() return "requires player (no player available)" end
+    )
+}
+
+ZBSpec.sp = {
+    describe = makeContextDescribe(
+        function() return ZBSpec.isMultiplayer() end,
+        function() return "singleplayer only (running in multiplayer)" end
+    )
+}
+
+ZBSpec.mp = {
+    describe = makeContextDescribe(
+        function() return ZBSpec.isSingleplayer() end,
+        function() return "multiplayer only (running in singleplayer)" end
+    )
+}
 
 -- Assertions
 ZBSpec.assert = {}
@@ -152,35 +263,78 @@ end
 -- Run all tests and return zbspec-compatible result
 function ZBSpec.run()
     errors = {}
+    local passed = 0
+    local failed = 0
     
-    for _, test in ipairs(tests) do
-        local ok, err = pcall(test.fn)
-        if not ok then
-            table.insert(errors, test.name .. ": " .. tostring(err))
+    for _, t in ipairs(tests) do
+        local ok, err = pcall(t.fn)
+        if ok then
+            passed = passed + 1
+        else
+            failed = failed + 1
+            table.insert(errors, t.name .. ": " .. tostring(err))
         end
     end
     
     -- Reset for next run
     tests = {}
+    skipped = {}
     
+    -- Return simple result for backward compatibility
     if #errors > 0 then
         return table.concat(errors, "\n")
     end
     return true
 end
 
+-- Get detailed results (for advanced reporting)
+function ZBSpec.runDetailed()
+    errors = {}
+    local passed = 0
+    local failed = 0
+    
+    for _, t in ipairs(tests) do
+        local ok, err = pcall(t.fn)
+        if ok then
+            passed = passed + 1
+        else
+            failed = failed + 1
+            table.insert(errors, { name = t.name, error = tostring(err) })
+        end
+    end
+    
+    local result = {
+        passed = passed,
+        failed = failed,
+        skipped = #skipped,
+        context = ZBSpec.getContext(),
+        errors = errors,
+        skipped_tests = skipped
+    }
+    
+    -- Reset for next run
+    tests = {}
+    skipped = {}
+    
+    return result
+end
+
 -- Reset state (useful between spec files)
 function ZBSpec.reset()
     tests = {}
+    skipped = {}
     errors = {}
     currentDescribe = ""
+    skipCurrentBlock = false
+    skipReason = nil
 end
 
--- Aliases for convenience
+-- Global aliases for convenience
 describe = ZBSpec.describe
 context = ZBSpec.context
 it = ZBSpec.it
 test = ZBSpec.test
 assert = ZBSpec.assert
+pending = ZBSpec.pending
 
 return ZBSpec

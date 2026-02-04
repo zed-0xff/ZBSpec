@@ -179,6 +179,84 @@ end)
 return ZBSpec.run()
 ```
 
+### Client/Server Support
+
+ZBSpec supports running the same spec files in singleplayer, multiplayer client, and server contexts. Use context-specific describe blocks to write tests that work everywhere.
+
+#### Context Detection
+
+```lua
+ZBSpec.isClient()       -- true on MP client
+ZBSpec.isServer()       -- true on dedicated server
+ZBSpec.isMultiplayer()  -- true if MP (client or server)
+ZBSpec.isSingleplayer() -- true if SP
+ZBSpec.hasPlayer()      -- true if getPlayer() returns non-nil
+ZBSpec.getContext()     -- "client", "server", or "singleplayer"
+```
+
+#### Context-Specific Describe Blocks
+
+Tests in these blocks are automatically skipped when running in the wrong context:
+
+```lua
+require "ZBSpec"
+
+-- Runs everywhere
+ZBSpec.describe("data validation", function()
+    it("has valid config", function()
+        assert.is_table(MyMod.config)
+    end)
+end)
+
+-- Only runs when player is available (SP or MP client)
+ZBSpec.player.describe("player features", function()
+    it("tracks XP", function()
+        local player = getPlayer()
+        assert.is_not_nil(player:getXp())
+    end)
+end)
+
+-- Only runs on client (skipped on server)
+ZBSpec.client.describe("UI features", function()
+    it("has overlay", function()
+        assert.is_function(MyMod.renderOverlay)
+    end)
+end)
+
+-- Only runs on dedicated server (skipped on client/SP)
+ZBSpec.server.describe("server commands", function()
+    it("handles commands", function()
+        assert.is_table(MyMod.ServerCommands)
+    end)
+end)
+
+-- Only runs in singleplayer
+ZBSpec.sp.describe("SP-only features", function()
+    it("works offline", function()
+        -- ...
+    end)
+end)
+
+-- Only runs in multiplayer (client or server)
+ZBSpec.mp.describe("MP features", function()
+    it("syncs data", function()
+        -- ...
+    end)
+end)
+
+return ZBSpec.run()
+```
+
+#### Pending Tests
+
+Mark tests as pending (not implemented yet):
+
+```lua
+pending("future feature", function()
+    -- This won't run, just recorded as pending
+end)
+```
+
 ## Configuration
 
 Full `zbspec.yml` options:
@@ -211,7 +289,39 @@ spec_glob: spec/**/*_spec.lua
 # Mods to load (ZombieBuddy and ZBSpec added automatically)
 mods:
   - YourModName
+
+# Multiplayer settings (for --mp and --client modes)
+server_name: ZBSpecServer
+server_ip: 127.0.0.1
+server_port: 16261
+username: ZBSpecPlayer
+password: ""
+
+# Use existing running instances for MP testing
+use_running_server: false
+use_running_client: false
 ```
+
+## Spec Folder Structure
+
+Organize specs by where they should run:
+
+```
+spec/
+├── zbspec.yml           # Config file
+├── data_spec.lua        # Root specs (shared, run everywhere)
+├── client/
+│   └── ui_spec.lua      # Client-only specs (also run in SP)
+├── server/
+│   └── commands_spec.lua # Server-only specs
+└── shared/
+    └── sync_spec.lua    # Shared specs (run on both)
+```
+
+- **`spec/client/`** - Client-only specs (also run in singleplayer)
+- **`spec/server/`** - Server-only specs (dedicated server)
+- **`spec/shared/`** - Shared specs (run on both client and server)
+- **`spec/*_spec.lua`** - Root specs (treated as shared)
 
 ## CLI Options
 
@@ -221,8 +331,27 @@ Usage: zbspec [options] [spec_files...]
     -c, --config PATH    Path to config file (default: spec/zbspec.yml)
     -m, --mod-dir PATH   Path to mod directory
     -v, --verbose        Show verbose output (including health checks)
+        --sp             Force singleplayer mode
+        --server         Run specs on dedicated server only
+        --client         Run specs on MP client only (server must be running)
+        --mp             Run specs on both server and client
     -h, --help           Show help
         --version        Show version
+```
+
+### Auto-Detection
+
+By default, ZBSpec auto-detects the run mode based on spec folders:
+
+- If `spec/server/` contains specs → runs in MP mode
+- If only `spec/client/` or root specs → runs in SP mode
+
+```bash
+zbspec              # Auto-detect mode from spec folders
+zbspec --sp         # Force singleplayer
+zbspec --mp         # Force multiplayer (server + client)
+zbspec --server     # Server specs only
+zbspec --client     # Client specs only (server must be running)
 ```
 
 ## Example Output

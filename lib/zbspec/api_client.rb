@@ -15,7 +15,7 @@ module ZBSpec
     end
 
     # Discover port from file and update base URI
-    def discover_port(timeout: 60)
+    def discover_port(timeout: 120)
       return if @port && @base_uri # Port already set
       
       puts "🔍 Discovering API port from #{@port_file}..."

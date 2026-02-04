@@ -10,7 +10,8 @@ module ZBSpec
       @config = config
       @pid = nil
       @running = false
-      @pid_file = File.join('tmp', 'zbspec.pid')
+      instance_name = config['instance_name'] || 'default'
+      @pid_file = File.join('tmp', "zbspec_#{instance_name}.pid")
     end
 
     def start
@@ -44,9 +45,13 @@ module ZBSpec
       # Setup log file for game output
       log_file = setup_log_file
 
-      # Launch game in background with redirected output
+      # Launch game in background
       puts "Launching game with args: #{args.inspect}"
-      @pid = spawn(*args, out: log_file, err: log_file)
+      if config['server_mode']
+        @pid = spawn(*args)
+      else
+        @pid = spawn(*args, out: log_file)
+      end
       @running = true
 
       # Write PID file
@@ -83,6 +88,10 @@ module ZBSpec
       process_alive?(@pid)
     end
 
+    def get_cache_dir
+      File.expand_path(config['cache_dir'] || default_cache_dir)
+    end
+
     private
 
     def process_alive?(pid)
@@ -101,7 +110,7 @@ module ZBSpec
     end
 
     def clean_port_file
-      cache_dir = File.expand_path(config['cache_dir'] || './tmp/cache')
+      cache_dir = get_cache_dir
       port_file = File.join(cache_dir, 'zbLuaAPI.txt')
       
       if File.exist?(port_file)
@@ -128,30 +137,75 @@ module ZBSpec
 
       args = [game_exe]
       args << "-javaagent:ZombieBuddy.jar=lua_server_port=random"
+      
+      if config['server_mode']
+        # Dedicated server uses different main class
+        args << 'zombie.network.GameServer'
+      end
+      
       args << '--'
-      args << '-Dzomboid' if mac?
-      cache_dir = File.expand_path(config['cache_dir'] || './tmp/cache')
+      
+      cache_dir = File.expand_path(config['cache_dir'] || default_cache_dir)
       init_cachedir(cache_dir)
 
       args << "-cachedir=#{cache_dir}"
       
-      args.concat(['-novoip', '-nosound', '-nosteam', '-no-worldgen', '-no-foraging', '-no-attachments'])
-      args << '-server' if config['server_mode']
-      args << '-debug' if config['debug']
+      if config['server_mode']
+        # Server-specific options
+        server_name = config['server_name'] || 'ZBSpecServer'
+        args << server_name
+        args << '-nosteam'
+        args << '-adminpassword'
+        args << (config['admin_password'] || 'zbspec')
+      else
+        # Client/SP-specific options
+        args.concat(['-novoip', '-nosound', '-nosteam', '-no-worldgen', '-no-foraging', '-no-attachments'])
+        
+        if config['server_ip']
+          # Client connecting to server
+          args << "-ip=#{config['server_ip']}"
+          args << "-port=#{config['server_port'] || 16261}"
+          args << "-user=#{config['username'] || 'ZBSpecPlayer'}"
+          args << "-password=#{config['password'] || ''}"
+        end
+        
+        args << '-debug' if config['debug']
+      end
+      
       args
     end
 
-    def get_cache_dir
-      File.expand_path(config['cache_dir'] || './tmp/cache')
+    def default_cache_dir
+      if config['server_mode']
+        './tmp/cache_server'
+      elsif config['server_ip']
+        './tmp/cache_client'
+      else
+        './tmp/cache_sp'
+      end
     end
 
     def init_cachedir(cache_dir)
       mods_dir = File.join(cache_dir, 'mods')
       FileUtils.mkdir_p(mods_dir)
-      Dir[File.join(__dir__, '../../config/*.ini')].each do |ini_fname|
-        FileUtils.cp(ini_fname, cache_dir)
+      # Copy ini files from config dir, preserving subdirectory structure
+      config_dir = File.join(__dir__, '../../config')
+      Dir[File.join(config_dir, '**/*.ini')].each do |ini_fname|
+        relative_path = ini_fname.sub("#{config_dir}/", '')
+        dest_path = File.join(cache_dir, relative_path)
+        FileUtils.mkdir_p(File.dirname(dest_path))
+        FileUtils.cp(ini_fname, dest_path)
       end
       FileUtils.touch(File.join(mods_dir, 'reset-mods-42_00.txt'))
+      
+      # Update server ini with mods list
+      server_ini = File.join(cache_dir, 'Server', 'servertest.ini')
+      if File.exist?(server_ini)
+        mods_str = build_mod_list.map{|m| "\\#{m}"}.join(';')
+        content = File.read(server_ini)
+        content.gsub!(/^Mods=.*$/, "Mods=#{mods_str}")
+        File.write(server_ini, content)
+      end
 
       # Create symlinks only if they don't exist
       this_link = File.join(mods_dir, 'this')

@@ -2,6 +2,7 @@
 # frozen_string_literal: true
 
 require 'optparse'
+require 'fileutils'
 
 # Add lib to load path
 $LOAD_PATH.unshift File.expand_path('../lib', __dir__)
@@ -9,10 +10,11 @@ require 'zbspec'
 
 # Parse command line options
 options = {
-  config: 'spec/zbspec.yml',  # Default config path
+  config: 'spec/zbspec.yml',
   mod_dir: nil,
   spec_files: [],
-  verbose: false
+  verbose: false,
+  mode: :auto  # :auto, :sp, :server, :client, :mp
 }
 
 OptionParser.new do |opts|
@@ -30,12 +32,46 @@ OptionParser.new do |opts|
     options[:verbose] = true
   end
 
+  opts.on('--sp', 'Run specs in singleplayer mode') do
+    options[:mode] = :sp
+  end
+
+  opts.on('--server', 'Run specs on server only') do
+    options[:mode] = :server
+  end
+
+  opts.on('--client', 'Run specs on client only (connects to localhost)') do
+    options[:mode] = :client
+  end
+
+  opts.on('--mp', 'Run specs on both server and client') do
+    options[:mode] = :mp
+  end
+
+  opts.on('--stop', 'Stop all running ZBSpec instances') do
+    options[:mode] = :stop
+  end
+
   opts.on('-h', '--help', 'Show this help') do
     puts opts
+    puts "\nSpec folder structure:"
+    puts "  spec/client/*_spec.lua  - Client-only specs (also run in SP)"
+    puts "  spec/server/*_spec.lua  - Server-only specs"
+    puts "  spec/shared/*_spec.lua  - Shared specs (run on both)"
+    puts "  spec/*_spec.lua         - Root specs (treated as shared)"
+    puts "\nModes:"
+    puts "  (default)   Auto-detect based on spec folders"
+    puts "  --sp        Force singleplayer mode"
+    puts "  --server    Run server specs only"
+    puts "  --client    Run client specs only (server must be running)"
+    puts "  --mp        Run both server and client specs"
+    puts "  --stop      Stop all running ZBSpec instances"
     puts "\nExamples:"
-    puts "  zbspec                              # Run all specs matching spec_glob"
-    puts "  zbspec spec/my_spec.lua             # Run specific spec file"
-    puts "  zbspec spec/foo_spec.lua spec/bar_spec.lua  # Run multiple files"
+    puts "  zbspec                    # Auto-detect mode from spec folders"
+    puts "  zbspec --mp               # Force MP mode"
+    puts "  zbspec --sp               # Force SP mode"
+    puts "  zbspec --stop             # Stop all running instances"
+    puts "  zbspec spec/my_spec.lua   # Run specific spec file"
     exit
   end
 
@@ -59,7 +95,6 @@ end
 test_runner_class = nil
 
 if options[:mod_dir]
-  # Try spec/framework first, then spec (legacy)
   spec_paths = [
     File.join(options[:mod_dir], 'spec', 'framework', 'spec_runner.rb'),
     File.join(options[:mod_dir], 'spec', 'spec_runner.rb')
@@ -71,23 +106,118 @@ if options[:mod_dir]
     puts "📦 Loading mod specs from: #{mod_spec_file}"
     require mod_spec_file
     
-    # Find the custom test runner class
-    # Look for classes that inherit from ZBSpec::TestRunner
     test_runner_class = ObjectSpace.each_object(Class).find do |klass|
       klass < ZBSpec::TestRunner && klass != ZBSpec::TestRunner
     end
     
-    if test_runner_class
-      puts "✓ Using custom spec runner: #{test_runner_class}"
-    end
+    puts "✓ Using custom spec runner: #{test_runner_class}" if test_runner_class
   end
 end
 
-# Run the harness
-harness = ZBSpec::Harness.new(
-  config_path: options[:config],
-  test_runner_class: test_runner_class,
-  spec_files: options[:spec_files].empty? ? nil : options[:spec_files],
-  verbose: options[:verbose]
-)
+# Discover specs and determine mode
+discovery = ZBSpec::SpecDiscovery.new
+
+if options[:spec_files].any?
+  puts "📋 Running specified spec files: #{options[:spec_files].join(', ')}"
+else
+  puts "📋 Discovered specs: #{discovery.summary}"
+end
+
+# Auto-detect mode if not specified
+if options[:mode] == :auto
+  options[:mode] = discovery.recommended_mode
+  mode_reason = case options[:mode]
+                when :mp then "server + client specs found"
+                when :server then "only server specs found"
+                else "no server specs found"
+                end
+  puts "🔍 Auto-detected mode: #{options[:mode]} (#{mode_reason})"
+end
+
+# Run the appropriate harness
+FileUtils.mkdir_p('logs')
+
+case options[:mode]
+when :mp
+  puts "\n🎮 Multiplayer mode: running specs on server and client"
+  harness = ZBSpec::MPHarness.new(
+    config_path: options[:config],
+    spec_files: options[:spec_files].empty? ? nil : options[:spec_files],
+    verbose: options[:verbose]
+  )
+when :server
+  puts "\n🖥️  Server mode: running specs on dedicated server"
+  spec_files = options[:spec_files].empty? ? discovery.specs_for(:server) : options[:spec_files]
+  harness = ZBSpec::Harness.new(
+    config_path: options[:config],
+    test_runner_class: test_runner_class,
+    spec_files: spec_files.empty? ? nil : spec_files,
+    verbose: options[:verbose],
+    config_overrides: { 'server_mode' => true }
+  )
+when :client
+  puts "\n💻 Client mode: running specs on MP client"
+  spec_files = options[:spec_files].empty? ? discovery.specs_for(:client) : options[:spec_files]
+  harness = ZBSpec::Harness.new(
+    config_path: options[:config],
+    test_runner_class: test_runner_class,
+    spec_files: spec_files.empty? ? nil : spec_files,
+    verbose: options[:verbose],
+    config_overrides: { 'server_ip' => '127.0.0.1' }
+  )
+when :stop
+  puts "🛑 Stopping all ZBSpec instances..."
+  pid_files = Dir.glob('tmp/zbspec_*.pid')
+  
+  if pid_files.empty?
+    puts "  No running instances found"
+  else
+    pid_files.each do |pid_file|
+      pid = File.read(pid_file).strip.to_i
+      instance = File.basename(pid_file, '.pid').sub('zbspec_', '')
+      
+      begin
+        Process.kill(0, pid)  # Check if process exists
+        puts "  Stopping #{instance} (PID: #{pid})..."
+        Process.kill('TERM', pid)
+        sleep 0.5
+        # Force kill if still running
+        begin
+          Process.kill(0, pid)
+          Process.kill('KILL', pid)
+        rescue Errno::ESRCH
+          # Already dead
+        end
+        puts "  ✓ Stopped #{instance}"
+      rescue Errno::ESRCH
+        puts "  ⚠️  #{instance} already stopped (stale PID file)"
+      end
+      
+      File.delete(pid_file)
+    end
+  end
+  
+  # Also clean up port files
+  %w[cache_sp cache_client cache_server].each do |cache|
+    port_file = "tmp/#{cache}/zbLuaAPI.txt"
+    if File.exist?(port_file)
+      File.delete(port_file)
+      puts "  Cleaned #{port_file}"
+    end
+  end
+  
+  puts "✓ Done"
+  exit 0
+else
+  # Default: singleplayer
+  puts "\n🎮 Singleplayer mode"
+  spec_files = options[:spec_files].empty? ? discovery.specs_for(:sp) : options[:spec_files]
+  harness = ZBSpec::Harness.new(
+    config_path: options[:config],
+    test_runner_class: test_runner_class,
+    spec_files: spec_files.empty? ? nil : spec_files,
+    verbose: options[:verbose]
+  )
+end
+
 harness.run
