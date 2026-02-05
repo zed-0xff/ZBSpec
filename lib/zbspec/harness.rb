@@ -8,14 +8,14 @@ module ZBSpec
     def initialize(config_path: nil, test_runner_class: nil, spec_files: nil, verbosity: 0, config_overrides: {})
       @config = Config.new(config_path)
       config_overrides.each { |k, v| @config[k] = v }
-      @launcher = GameLauncher.new(@config)
       @verbosity = verbosity
+      @launcher = GameLauncher.new(@config, verbosity: verbosity)
       
       # Create API client with port file path for discovery
       # Use the same cache dir logic as the launcher
       port_file = File.join(@launcher.get_cache_dir, 'zbLuaAPI.txt')
       label = @config['server_mode'] ? 'server' : 'sp'
-      @api_client = APIClient.new(port_file: port_file, label: label)
+      @api_client = APIClient.new(port_file: port_file, label: label, verbosity: verbosity)
       
       # Use provided test runner class or default
       runner_class = test_runner_class || TestRunner
@@ -28,8 +28,10 @@ module ZBSpec
     end
 
     def run_without_exit
-      puts '🚀 PZ Spec Harness Starting'
-      puts '=' * 50
+      if verbosity > 0
+        puts '🚀 PZ Spec Harness Starting'
+        puts '=' * 50
+      end
 
       # Launch game (if not already running)
       launch_game_if_needed
@@ -44,11 +46,11 @@ module ZBSpec
       if config['server_mode']
         is_server = api_client.execute('return isServer()')
         raise "Instance should be server but isServer()=#{is_server}" unless is_server
-        puts "\n✓ API ready (isServer=true)\n"
+        puts "✓ Server ready" if verbosity > 0
       elsif config['server_ip']
         is_client = api_client.execute('return isClient()')
         raise "Instance should be client but isClient()=#{is_client}" unless is_client
-        puts "\n✓ API ready (isClient=true)\n"
+        puts "✓ Client ready" if verbosity > 0
         api_client.wait_for_player(timeout: startup_timeout)
       else
         # SP mode: should be neither client nor server
@@ -57,13 +59,12 @@ module ZBSpec
         if is_client || is_server
           raise "SP instance should be neither client nor server, but isClient=#{is_client}, isServer=#{is_server}"
         end
-        puts "\n✓ API ready (SP mode)\n"
+        puts "✓ SP ready" if verbosity > 0
         api_client.wait_for_player(timeout: startup_timeout)
       end
 
       # Run all specs
-      puts "\n🧪 Running Spec Suite"
-      puts '=' * 50
+      puts "\n🧪 Running Specs" if verbosity > 0
       results = test_runner.run_all
 
       # Report results

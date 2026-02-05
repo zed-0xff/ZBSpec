@@ -14,17 +14,19 @@ module ZBSpec
       @discovery = SpecDiscovery.new
 
       # Create separate launchers for server and client
-      @server_launcher = GameLauncher.new(server_config, label: 'server')
-      @client_launcher = GameLauncher.new(client_config, label: 'client')
+      @server_launcher = GameLauncher.new(server_config, label: 'server', verbosity: verbosity)
+      @client_launcher = GameLauncher.new(client_config, label: 'client', verbosity: verbosity)
 
       # Create API clients for each
-      @server_api = APIClient.new(port_file: server_port_file, label: 'server')
-      @client_api = APIClient.new(port_file: client_port_file, label: 'client')
+      @server_api = APIClient.new(port_file: server_port_file, label: 'server', verbosity: verbosity)
+      @client_api = APIClient.new(port_file: client_port_file, label: 'client', verbosity: verbosity)
     end
 
     def run
-      puts '🚀 ZBSpec Multiplayer Harness Starting'
-      puts '=' * 50
+      if @verbosity > 0
+        puts '🚀 ZBSpec Multiplayer Harness Starting'
+        puts '=' * 50
+      end
 
       begin
         # Launch both instances in parallel
@@ -80,7 +82,7 @@ module ZBSpec
     end
 
     def launch_instances_parallel
-      puts "\n🚀 Launching all instances in parallel..."
+      puts "\n🚀 Launching instances..." if @verbosity > 0
       
       threads = []
       
@@ -88,7 +90,7 @@ module ZBSpec
       unless @config['use_running_server']
         threads << Thread.new do
           @server_launcher.start
-          puts "  ✓ Server process started (PID: #{@server_launcher.pid})"
+          puts "  ✓ Server started (PID: #{@server_launcher.pid})" if @verbosity > 0
         end
       end
       
@@ -96,7 +98,7 @@ module ZBSpec
       unless @config['use_running_client']
         threads << Thread.new do
           @client_launcher.start
-          puts "  ✓ Client process started (PID: #{@client_launcher.pid})"
+          puts "  ✓ Client started (PID: #{@client_launcher.pid})" if @verbosity > 0
         end
       end
       
@@ -108,7 +110,7 @@ module ZBSpec
       server_timeout = @config['server_startup_timeout'] || 60
       client_timeout = @config['startup_timeout'] || 120
       
-      puts "\n⏳ Waiting for instances to be ready..."
+      puts "⏳ Waiting for instances..." if @verbosity > 0
       
       # Wait for both in parallel threads, but server must be ready before client can connect
       server_ready = false
@@ -127,7 +129,7 @@ module ZBSpec
           raise "Server instance is not running as server! isServer()=#{is_server}" unless is_server
           
           server_ready = true
-          puts "  ✓ Server API ready (isServer=true)"
+          puts "  ✓ Server ready" if @verbosity > 0
         end
       else
         server_ready = true
@@ -147,7 +149,7 @@ module ZBSpec
           is_client = @client_api.execute('return isClient()')
           raise "Client instance is not running as client! isClient()=#{is_client}" unless is_client
           
-          puts "  ✓ Client API ready (isClient=true, player spawned)"
+          puts "  ✓ Client ready" if @verbosity > 0
         rescue => e
           client_error = e
         end
@@ -163,8 +165,14 @@ module ZBSpec
       results = TestResults.new
 
       # Determine which specs to run where
-      server_specs = @spec_files || @discovery.specs_for(:server)
-      client_specs = @spec_files || @discovery.specs_for(:client)
+      # If specific files provided, filter by folder; otherwise use discovery
+      if @spec_files
+        server_specs = @spec_files.select { |f| f.include?('/server/') || f.include?('/shared/') || !f.match?(%r{/(?:client|server|shared)/}) }
+        client_specs = @spec_files.select { |f| f.include?('/client/') || f.include?('/shared/') || !f.match?(%r{/(?:client|server|shared)/}) }
+      else
+        server_specs = @discovery.specs_for(:server)
+        client_specs = @discovery.specs_for(:client)
+      end
 
       # Run specs on server (unless client_only mode)
       unless @client_only

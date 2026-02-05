@@ -7,12 +7,14 @@ module ZBSpec
     LABEL_WIDTH = 8  # "[server] " width
 
     attr_reader :port, :base_uri, :host, :label
+    attr_accessor :verbosity
 
-    def initialize(port: nil, host: '127.0.0.1', port_file: nil, label: nil)
+    def initialize(port: nil, host: '127.0.0.1', port_file: nil, label: nil, verbosity: 0)
       @port = port
       @host = host
       @port_file = port_file
       @label = label
+      @verbosity = verbosity
       @base_uri = port ? URI("http://#{host}:#{port}/lua") : nil
     end
 
@@ -282,6 +284,7 @@ module ZBSpec
     private
 
     def log(msg)
+      return unless @verbosity > 0
       prefix = @label ? "[#{@label.ljust(6)}] " : ""
       puts "#{prefix}#{msg}"
     end

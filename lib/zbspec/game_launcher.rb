@@ -6,15 +6,18 @@ module ZBSpec
   class GameLauncher
     LABEL_WIDTH = 8
     attr_reader :config, :pid, :label
+    attr_accessor :verbosity
 
-    def initialize(config, label: nil)
+    def initialize(config, label: nil, verbosity: 0)
       @config = config
       @label = label || (config['server_mode'] ? 'server' : 'sp')
+      @verbosity = verbosity
       @pid = nil
       @running = false
     end
 
     def log(msg)
+      return unless @verbosity > 0
       puts "[#{@label.ljust(6)}] #{msg}"
     end
 
@@ -54,17 +57,18 @@ module ZBSpec
       log_file = setup_log_file
 
       # Launch game in background, redirect stdout and stderr to log
-      puts "Launching game with args: #{args.inspect}"
+      log "Launching with args: #{args.inspect}"
       @pid = spawn(*args, out: log_file, err: log_file)
       @running = true
 
       # Write PID file
       write_pid_file
 
-      puts "  PID: #{@pid}"
-      puts "  Log: #{log_file}"
-      puts "  Mods: #{config['mods'].join(', ')}" if config['mods']
-      puts '  Waiting for startup...'
+      if @verbosity > 0
+        log "PID: #{@pid}"
+        log "Log: #{log_file}"
+        log "Mods: #{config['mods'].join(', ')}" if config['mods']
+      end
     rescue StandardError => e
       raise GameLaunchError, "Failed to launch game: #{e.message}"
     end
@@ -201,7 +205,7 @@ module ZBSpec
       FileUtils.mkdir_p(mods_dir)
       # Copy ini files from config dir, preserving subdirectory structure
       config_dir = File.join(__dir__, '../../config')
-      Dir[File.join(config_dir, '**/*.{ini,lua}')].each do |ini_fname|
+      Dir[File.join(config_dir, '**/*.ini')].each do |ini_fname|
         relative_path = ini_fname.sub("#{config_dir}/", '')
         dest_path = File.join(cache_dir, relative_path)
         FileUtils.mkdir_p(File.dirname(dest_path))

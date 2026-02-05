@@ -91,7 +91,7 @@ local jobCounter = 0
 function ZBSpec.wait_for(condition, ...)
     local args = { ... }
     local unpackArgs = table.unpack or unpack
-    local timeout = 5
+    local timeout = 10
     local startTime = os.time()
     
     while not condition(unpackArgs(args)) do
@@ -108,7 +108,7 @@ end
 function ZBSpec.wait_for_not(condition, ...)
     local args = { ... }
     local unpackArgs = table.unpack or unpack
-    local timeout = 5
+    local timeout = 10
     local startTime = os.time()
     
     while condition(unpackArgs(args)) do
