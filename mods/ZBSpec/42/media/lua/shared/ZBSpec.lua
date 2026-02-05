@@ -13,6 +13,7 @@ local skipReason = nil
 local beforeEachStack = {}  -- Stack of before_each functions for nested describes
 local beforeAllStack = {}   -- Stack of before_all functions for nested describes
 local beforeAllRan = {}     -- Track which describe blocks have run their before_all
+described_class = nil       -- The class/table passed to describe(), if not a string
 
 
 -- Context detection
@@ -51,8 +52,16 @@ function ZBSpec.describe(name, fn)
     local prevDescribe = currentDescribe
     local prevSkip = skipCurrentBlock
     local prevReason = skipReason
+    local prevDescribedClass = described_class
     
-    currentDescribe = currentDescribe ~= "" and (currentDescribe .. " " .. name) or name
+    -- If name is not a string, it's the class itself
+    if type(name) ~= "string" then
+        described_class = name
+        name = tostring(name)
+    end
+    -- Keep parent's described_class for nested string describes
+    
+    currentDescribe = currentDescribe ~= "" and (currentDescribe .. " " .. tostring(name)) or tostring(name)
     
     -- Push new scope for before_each and before_all
     table.insert(beforeEachStack, {})
@@ -67,6 +76,7 @@ function ZBSpec.describe(name, fn)
     currentDescribe = prevDescribe
     skipCurrentBlock = prevSkip
     skipReason = prevReason
+    described_class = prevDescribedClass
 end
 
 function ZBSpec.before_each(fn)
@@ -190,6 +200,7 @@ function ZBSpec.runDetailedAsync()
     
     for _, t in ipairs(testList) do
         ZBSpec.currentTest = t.name
+        described_class = t.described_class
         local testOk = true
         local testErr = nil
         
@@ -236,6 +247,7 @@ function ZBSpec.runDetailedAsync()
     end
     
     ZBSpec.currentTest = nil
+    described_class = nil
     results.skipped = #skippedList
     return results
 end
@@ -324,7 +336,7 @@ function ZBSpec.cancelAllJobs()
 end
 
 function ZBSpec.it(name, fn)
-    local fullName = currentDescribe ~= "" and (currentDescribe .. " " .. name) or name
+    local fullName = currentDescribe ~= "" and (currentDescribe .. " " .. tostring(name)) or tostring(name)
     
     if skipCurrentBlock then
         table.insert(skipped, { name = fullName, reason = skipReason })
@@ -348,7 +360,8 @@ function ZBSpec.it(name, fn)
             fn = fn,
             before_each = beforeEachHooks,
             before_all = beforeAllHooks,
-            describe = currentDescribe
+            describe = currentDescribe,
+            described_class = described_class
         })
     end
 end
@@ -368,7 +381,7 @@ function ZBSpec.skip(reason)
 end
 
 function ZBSpec.pending(name, fn)
-    local fullName = currentDescribe ~= "" and (currentDescribe .. " " .. name) or name
+    local fullName = currentDescribe ~= "" and (currentDescribe .. " " .. tostring(name)) or tostring(name)
     table.insert(skipped, { name = fullName, reason = "pending" })
 end
 
@@ -427,6 +440,15 @@ ZBSpec.mp = {
 
 -- Assertions
 ZBSpec.assert = {}
+
+-- Make assert callable: assert(condition, message)
+setmetatable(ZBSpec.assert, {
+    __call = function(self, condition, message)
+        if not condition then
+            error(message or "assertion failed", 2)
+        end
+    end
+})
 
 function ZBSpec.assert.is_equal(expected, actual)
     if expected ~= actual then
@@ -561,6 +583,7 @@ function ZBSpec.run()
     
     for _, t in ipairs(testList) do
         ZBSpec.currentTest = t.name
+        described_class = t.described_class
         -- Run before_all hooks once per describe block
         if t.before_all and t.describe and not ranBeforeAll[t.describe] then
             ranBeforeAll[t.describe] = true
@@ -578,6 +601,7 @@ function ZBSpec.run()
     end
     
     ZBSpec.currentTest = nil
+    described_class = nil
     return true
 end
 
@@ -591,6 +615,7 @@ function ZBSpec.runDetailed()
     local ranBeforeAll = {}
     
     for _, t in ipairs(tests) do
+        described_class = t.described_class
         local ok, err = pcall(function()
             -- Run before_all hooks once per describe block
             if t.before_all and t.describe and not ranBeforeAll[t.describe] then
@@ -615,6 +640,7 @@ function ZBSpec.runDetailed()
         end
     end
     
+    described_class = nil
     local result = {
         passed = passed,
         failed = failed,
