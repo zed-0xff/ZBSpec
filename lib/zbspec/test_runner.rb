@@ -72,7 +72,7 @@ module ZBSpec
         
         begin
           # Execute the spec file in the game with async support
-          # This handles spec files that use ZBSpec.runAsync() with wait_until/sleep
+          # This handles spec files that use ZBSpec.runAsync() with wait_for/sleep
           result = api_client.execute_async(lua_code, chunkname: spec_file)
           
           # Log raw response if verbosity >= 2

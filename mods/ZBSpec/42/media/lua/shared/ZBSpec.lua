@@ -78,7 +78,7 @@ local jobCounter = 0
 -- Wait until a condition is true, yielding between polls
 -- Each yield returns control to Java; next poll resumes here
 -- Supports optional args for condition; timeout uses default
-function ZBSpec.wait_until(condition, ...)
+function ZBSpec.wait_for(condition, ...)
     local args = { ... }
     local unpackArgs = table.unpack or unpack
     local timeout = 5
@@ -95,7 +95,7 @@ end
 
 -- Wait until a condition is false, yielding between polls
 -- Supports optional args for condition; timeout uses default
-function ZBSpec.wait_until_not(condition, ...)
+function ZBSpec.wait_for_not(condition, ...)
     local args = { ... }
     local unpackArgs = table.unpack or unpack
     local timeout = 5
@@ -120,19 +120,9 @@ function ZBSpec.wait_for_this(obj, method, ...)
     if type(fn) ~= "function" then
         error("wait_for_this: method is not a function: " .. tostring(method), 2)
     end
-    return ZBSpec.wait_until(function(...)
+    return ZBSpec.wait_for(function(...)
         return fn(obj, ...)
     end, ...)
-end
-
--- Alias: wait_until_this behaves like wait_for_this
-function ZBSpec.wait_until_this(obj, method, ...)
-    return ZBSpec.wait_for_this(obj, method, ...)
-end
-
--- Alias: wait_for behaves like wait_until
-function ZBSpec.wait_for(condition, ...)
-    return ZBSpec.wait_until(condition, ...)
 end
 
 -- Sleep for N seconds (yields between polls)
@@ -597,10 +587,7 @@ test = ZBSpec.test
 assert = ZBSpec.assert
 pending = ZBSpec.pending
 before_each = ZBSpec.before_each
-wait_until = ZBSpec.wait_until
-wait_until_not = ZBSpec.wait_until_not
 wait_for_this = ZBSpec.wait_for_this
-wait_until_this = ZBSpec.wait_until_this
 wait_for = ZBSpec.wait_for
 sleep = ZBSpec.sleep
 
