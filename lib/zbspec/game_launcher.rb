@@ -114,7 +114,7 @@ module ZBSpec
     def write_pid_file
       FileUtils.mkdir_p(get_cache_dir)
       File.write(pid_file, @pid.to_s)
-      puts "  PID file: #{File.expand_path(pid_file)}"
+      log "PID file: #{File.expand_path(pid_file)}"
     end
 
     def clean_port_file
@@ -123,7 +123,7 @@ module ZBSpec
       
       if File.exist?(port_file)
         File.delete(port_file)
-        puts "  Cleaned stale port file: #{port_file}"
+        log "Cleaned stale port file: #{port_file}"
       end
     end
 
