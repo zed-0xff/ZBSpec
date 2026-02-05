@@ -86,10 +86,49 @@ module ZBSpec
       nil
     end
 
+    # Execute Lua code with async support (for tests that yield)
+    # Returns the final result after polling is complete
+    def execute_async(lua_code, depth: 5, chunkname: nil, timeout: 60, poll_interval: 0.1)
+      # Execute the code - Lua manages coroutines internally
+      job_id = execute(lua_code, depth: depth, chunkname: chunkname)
+      
+      # If it's not a job ID, it's a direct result (no async needed)
+      return job_id unless job_id.is_a?(String) && job_id.start_with?('job_')
+
+      # Poll until complete
+      start_time = Time.now
+      loop do
+        elapsed = Time.now - start_time
+        if elapsed > timeout
+          raise APIError, "Async execution timed out after #{timeout}s (job: #{job_id})"
+        end
+
+        poll_result = execute("return ZBSpec.poll(\"#{job_id}\")")
+        
+        case poll_result
+        when Hash
+          case poll_result['status']
+          when 'completed'
+            return poll_result['result']
+          when 'error'
+            raise LuaError.new(poll_result['error'] || 'Unknown async error')
+          when 'pending'
+            # Still running, continue polling
+            sleep poll_interval
+          else
+            raise APIError, "Unknown poll status: #{poll_result['status']}"
+          end
+        else
+          # Unexpected response
+          raise APIError, "Unexpected poll response: #{poll_result.inspect}"
+        end
+      end
+    end
+
     # Custom error class for Lua execution errors
     class LuaError < StandardError
       attr_reader :raw_error, :error_message, :file, :line, :lua_return
-      attr_reader :test_name, :assertion_name
+      attr_reader :test_name, :assertion_name, :assertion_source
 
       def initialize(raw_error)
         @raw_error = raw_error
@@ -109,6 +148,13 @@ module ZBSpec
             # Extract best error message from luaReturn fields
             @error_message = extract_message_from_lua_return(@lua_return)
             extract_location_from_lua_return(@lua_return)
+          elsif data['kahluaErrors'].is_a?(Array)
+            # Java exception response with kahluaErrors attached
+            @lua_return = { 'kahluaErrors' => data['kahluaErrors'] }
+            @error_message = extract_message_from_lua_return(@lua_return)
+            extract_location_from_lua_return(@lua_return)
+          elsif data['javaException'].is_a?(Hash) && data['javaException']['message']
+            @error_message = data['javaException']['message']
           elsif data['error']
             @error_message = data['error']
           else
@@ -145,18 +191,62 @@ module ZBSpec
         
         # Extract all "function: name -- file: path line # N" entries
         entries = text.scan(/function:\s*(.+?)\s+--\s+file:\s*(\S+)\s+line\s*#\s*(\d+)/)
-        
+        spec_entries = []
+
         entries.each do |name, file, line|
           if file.end_with?('_spec.lua')
-            # This is the test function
-            @test_name = name
-            @file = file
-            @line = line.to_i
+            spec_entries << { name: name, file: file, line: line.to_i }
           elsif file.end_with?('ZBSpec.lua') && name != 'run'
             # This is the assertion function (e.g., greater_than, is_equal)
             @assertion_name ||= name
           end
         end
+
+        if spec_entries.any?
+          assertion_entry = spec_entries.first
+          test_entry = spec_entries.last
+          @assertion_file = assertion_entry[:file]
+          @assertion_line = assertion_entry[:line]
+          @test_name = test_entry[:name]
+          @file = test_entry[:file]
+          @line = test_entry[:line]
+        end
+
+        @assertion_source = extract_assertion_source(@assertion_file, @assertion_line, @assertion_name)
+      end
+
+      def extract_assertion_source(file, line, assertion_name)
+        return nil unless file && assertion_name
+
+        path = normalize_path(file)
+        return nil unless path && File.exist?(path)
+
+        lines = File.readlines(path)
+        target = "assert.#{assertion_name}"
+        idx = line ? line - 1 : nil
+
+        if idx && idx >= 0 && idx < lines.length && lines[idx].include?(target)
+          return lines[idx].strip
+        end
+
+        if idx
+          start_idx = [idx - 5, 0].max
+          end_idx = [idx + 5, lines.length - 1].min
+          (start_idx..end_idx).each do |i|
+            return lines[i].strip if lines[i].include?(target)
+          end
+        end
+
+        nil
+      end
+
+      def normalize_path(path)
+        return nil if path.nil? || path.strip.empty?
+        clean = path.sub(%r{\A\./}, '')
+        return clean if File.exist?(clean)
+        cwd_path = File.join(Dir.pwd, clean)
+        return cwd_path if File.exist?(cwd_path)
+        clean
       end
     end
 

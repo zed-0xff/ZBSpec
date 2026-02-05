@@ -44,11 +44,15 @@ module ZBSpec
     end
 
     def display_error_details(test)
-      if test.test_name || test.assertion_name
+      if test.test_name || test.assertion_name || test.assertion_source
         # Structured error display
         puts "      #{test.test_name}" if test.test_name
-        puts "          assert.#{test.assertion_name}" if test.assertion_name
-        puts "              #{YELLOW}#{test.error}#{RESET}"
+        if test.assertion_source
+          puts "          #{YELLOW}#{test.assertion_source}#{RESET}"
+        elsif test.assertion_name
+          puts "          assert.#{test.assertion_name}"
+        end
+        puts "              #{RED}#{test.error}#{RESET}"
       else
         # Simple error display
         puts "    #{YELLOW}Error: #{test.error}#{RESET}"

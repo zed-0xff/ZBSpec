@@ -12,6 +12,7 @@ local skipCurrentBlock = false
 local skipReason = nil
 local beforeEachStack = {}  -- Stack of before_each functions for nested describes
 
+
 -- Context detection
 function ZBSpec.isClient()
     return isClient and isClient()
@@ -68,6 +69,219 @@ function ZBSpec.before_each(fn)
     if #beforeEachStack > 0 then
         table.insert(beforeEachStack[#beforeEachStack], fn)
     end
+end
+
+-- Async support (requires ?raw=1 on HTTP calls to allow yielding)
+local pendingJobs = {}
+local jobCounter = 0
+
+-- Wait until a condition is true, yielding between polls
+-- Each yield returns control to Java; next poll resumes here
+-- Supports optional args for condition; timeout uses default
+function ZBSpec.wait_until(condition, ...)
+    local args = { ... }
+    local unpackArgs = table.unpack or unpack
+    local timeout = 5
+    local startTime = getTimestampMs and getTimestampMs() or (os.time() * 1000)
+    local timeoutMs = timeout * 1000
+    
+    while not condition(unpackArgs(args)) do
+        local now = getTimestampMs and getTimestampMs() or (os.time() * 1000)
+        if now - startTime > timeoutMs then
+            error(string.format("Timeout after %ds waiting for condition", timeout), 2)
+        end
+        coroutine.yield("pending")
+    end
+end
+
+-- Wait until a condition is false, yielding between polls
+-- Supports optional args for condition; timeout uses default
+function ZBSpec.wait_until_not(condition, ...)
+    local args = { ... }
+    local unpackArgs = table.unpack or unpack
+    local timeout = 5
+    local startTime = getTimestampMs and getTimestampMs() or (os.time() * 1000)
+    local timeoutMs = timeout * 1000
+    
+    while condition(unpackArgs(args)) do
+        local now = getTimestampMs and getTimestampMs() or (os.time() * 1000)
+        if now - startTime > timeoutMs then
+            error(string.format("Timeout after %ds waiting for condition", timeout), 2)
+        end
+        coroutine.yield("pending")
+    end
+end
+
+-- Wait until a method on an object returns true
+-- Usage: wait_for_this(obj, "methodName", ...)
+function ZBSpec.wait_for_this(obj, method, ...)
+    if obj == nil then
+        error("wait_for_this: object is nil", 2)
+    end
+    local fn = obj[method]
+    if type(fn) ~= "function" then
+        error("wait_for_this: method is not a function: " .. tostring(method), 2)
+    end
+    return ZBSpec.wait_until(function(...)
+        return fn(obj, ...)
+    end, ...)
+end
+
+-- Alias: wait_until_this behaves like wait_for_this
+function ZBSpec.wait_until_this(obj, method, ...)
+    return ZBSpec.wait_for_this(obj, method, ...)
+end
+
+-- Sleep for N seconds (yields between polls)
+function ZBSpec.sleep(seconds)
+    local startTime = getTimestampMs and getTimestampMs() or (os.time() * 1000)
+    local targetMs = startTime + (seconds * 1000)
+    
+    while true do
+        local now = getTimestampMs and getTimestampMs() or (os.time() * 1000)
+        if now >= targetMs then
+            return
+        end
+        coroutine.yield("pending")
+    end
+end
+
+-- Run tests with async support (no pcall - uses nested coroutines instead)
+function ZBSpec.runDetailedAsync()
+    local results = {
+        passed = 0,
+        failed = 0,
+        skipped = #skipped,
+        context = ZBSpec.getContext(),
+        errors = {},
+        skipped_tests = skipped
+    }
+    
+    local testList = tests
+    tests = {}
+    local skippedList = skipped
+    skipped = {}
+    results.skipped_tests = skippedList
+    
+    for _, t in ipairs(testList) do
+        ZBSpec.currentTest = t.name
+        local testOk = true
+        local testErr = nil
+        
+        -- Run before_each hooks (shouldn't yield, run directly)
+        if t.before_each then
+            for _, hook in ipairs(t.before_each) do
+                local ok, err = pcall(hook)
+                if not ok then
+                    testOk = false
+                    testErr = tostring(err)
+                    break
+                end
+            end
+        end
+        
+        -- Run test in its own coroutine to catch errors via resume
+        if testOk then
+            local testCo = coroutine.create(t.fn)
+            while true do
+                local ok, err = coroutine.resume(testCo)
+                if not ok then
+                    testOk = false
+                    testErr = tostring(err)
+                    break
+                end
+                if coroutine.status(testCo) == "dead" then
+                    break  -- Test completed successfully
+                end
+                -- Test yielded - propagate yield up to outer coroutine
+                coroutine.yield("pending")
+            end
+        end
+        
+        if testOk then
+            results.passed = results.passed + 1
+        else
+            results.failed = results.failed + 1
+            table.insert(results.errors, { name = t.name, error = testErr })
+        end
+    end
+    
+    ZBSpec.currentTest = nil
+    results.skipped = #skippedList
+    return results
+end
+
+-- Start an async spec run, returns job ID
+function ZBSpec.runAsync()
+    jobCounter = jobCounter + 1
+    local jobId = "job_" .. jobCounter
+    
+    local job = {
+        status = "pending",
+        result = nil,
+        error = nil
+    }
+    
+    job.coroutine = coroutine.create(function()
+        local results = ZBSpec.runDetailedAsync()
+        job.result = results
+        return results
+    end)
+    
+    pendingJobs[jobId] = job
+    
+    -- First resume to start the coroutine
+    local ok, result = coroutine.resume(job.coroutine)
+    if not ok then
+        job.status = "error"
+        job.error = tostring(result)
+    elseif coroutine.status(job.coroutine) == "dead" then
+        job.status = "completed"
+    end
+    
+    return jobId
+end
+
+-- Poll a job, resuming the coroutine once
+-- Returns: { status = "pending|completed|error", result = ..., error = ... }
+function ZBSpec.poll(jobId)
+    local job = pendingJobs[jobId]
+    if not job then
+        return { status = "error", error = "Unknown job: " .. tostring(jobId) }
+    end
+    
+    -- Already done?
+    if job.status ~= "pending" then
+        local result = { status = job.status }
+        if job.result then result.result = job.result end
+        if job.error then result.error = job.error end
+        if job.status ~= "pending" then
+            pendingJobs[jobId] = nil  -- cleanup
+        end
+        return result
+    end
+    
+    -- Resume coroutine once
+    local co = job.coroutine
+    if coroutine.status(co) == "suspended" then
+        local ok, result = coroutine.resume(co)
+        if not ok then
+            job.status = "error"
+            job.error = tostring(result)
+        elseif coroutine.status(co) == "dead" then
+            job.status = "completed"
+        end
+    elseif coroutine.status(co) == "dead" then
+        job.status = "completed"
+    end
+    
+    local response = { status = job.status }
+    if job.result then response.result = job.result end
+    if job.error then response.error = job.error end
+    if job.status ~= "pending" then
+        pendingJobs[jobId] = nil  -- cleanup
+    end
+    return response
 end
 
 function ZBSpec.it(name, fn)
@@ -354,6 +568,7 @@ function ZBSpec.reset()
     skipCurrentBlock = false
     skipReason = nil
     beforeEachStack = {}
+    -- Don't reset pendingCoroutines or tickHandlerRegistered - those are persistent
 end
 
 -- Global aliases for convenience
@@ -364,5 +579,10 @@ test = ZBSpec.test
 assert = ZBSpec.assert
 pending = ZBSpec.pending
 before_each = ZBSpec.before_each
+wait_until = ZBSpec.wait_until
+wait_until_not = ZBSpec.wait_until_not
+wait_for_this = ZBSpec.wait_for_this
+wait_until_this = ZBSpec.wait_until_this
+sleep = ZBSpec.sleep
 
 return ZBSpec

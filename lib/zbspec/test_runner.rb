@@ -71,20 +71,17 @@ module ZBSpec
         lua_code = File.read(spec_file)
         
         begin
-          # Execute the spec file in the game (pass filename for better error messages)
-          result = api_client.execute(lua_code, chunkname: spec_file)
+          # Execute the spec file in the game with async support
+          # This handles spec files that use ZBSpec.runAsync() with wait_until/sleep
+          result = api_client.execute_async(lua_code, chunkname: spec_file)
           
           # Log raw response if verbosity >= 2
           if verbosity >= 2
-            puts "    [raw] #{spec_file}:\n#{result}"
+            puts "    [raw] #{spec_file}:\n#{result.inspect}"
           end
           
-          # Spec files should return true on success
-          if result == true || result == 'true'
-            tests << test(spec_file, true)
-          else
-            tests << test(spec_file, false, error: result.to_s)
-          end
+          # Handle structured results from ZBSpec.runAsync()
+          tests.concat(process_spec_result(spec_file, result))
         rescue ZBSpec::APIClient::LuaError => e
           # Log raw error if verbosity >= 2
           if verbosity >= 2
@@ -104,10 +101,46 @@ module ZBSpec
           tests << test(location, false, 
                         error: e.error_message, 
                         test_name: e.test_name, 
-                        assertion_name: e.assertion_name)
+                        assertion_name: e.assertion_name,
+                        assertion_source: e.assertion_source)
         rescue StandardError => e
           tests << test(spec_file, false, error: "#{e.class}: #{e.message}")
         end
+      end
+      
+      tests
+    end
+
+    # Process result from ZBSpec.runAsync() / ZBSpec.runDetailed()
+    def process_spec_result(spec_file, result)
+      tests = []
+      
+      case result
+      when Hash
+        # Structured result from ZBSpec.runDetailed/runAsync
+        if result['errors'] && result['errors'].is_a?(Array)
+          # Process errors
+          result['errors'].each do |err|
+            name = err['name'] || spec_file
+            error_msg = err['error'] || 'Unknown error'
+            tests << test(name, false, error: error_msg)
+          end
+        end
+        
+        # Count passed tests (if we have the count but not individual names)
+        passed_count = result['passed'].to_i
+        if passed_count > 0 && tests.empty?
+          # All tests passed
+          tests << test(spec_file, true)
+        elsif tests.empty? && result['failed'].to_i == 0
+          tests << test(spec_file, true)
+        end
+      when true, 'true'
+        tests << test(spec_file, true)
+      when nil
+        tests << test(spec_file, false, error: 'No result returned')
+      else
+        tests << test(spec_file, false, error: result.to_s)
       end
       
       tests
@@ -144,8 +177,8 @@ module ZBSpec
     end
 
     # Helper to create a test case
-    def test(name, passed, error: nil, test_name: nil, assertion_name: nil)
-      TestCase.new(name, passed, error: error, test_name: test_name, assertion_name: assertion_name)
+    def test(name, passed, error: nil, test_name: nil, assertion_name: nil, assertion_source: nil)
+      TestCase.new(name, passed, error: error, test_name: test_name, assertion_name: assertion_name, assertion_source: assertion_source)
     end
 
     # Check if mod is loaded
