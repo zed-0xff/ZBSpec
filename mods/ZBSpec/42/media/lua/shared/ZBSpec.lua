@@ -587,8 +587,9 @@ test = ZBSpec.test
 assert = ZBSpec.assert
 pending = ZBSpec.pending
 before_each = ZBSpec.before_each
-wait_for_this = ZBSpec.wait_for_this
 wait_for = ZBSpec.wait_for
+wait_for_not = ZBSpec.wait_for_not
+wait_for_this = ZBSpec.wait_for_this
 sleep = ZBSpec.sleep
 
 return ZBSpec
