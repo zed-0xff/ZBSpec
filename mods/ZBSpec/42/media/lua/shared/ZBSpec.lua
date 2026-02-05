@@ -11,6 +11,8 @@ local currentDescribe = ""
 local skipCurrentBlock = false
 local skipReason = nil
 local beforeEachStack = {}  -- Stack of before_each functions for nested describes
+local beforeAllStack = {}   -- Stack of before_all functions for nested describes
+local beforeAllRan = {}     -- Track which describe blocks have run their before_all
 
 
 -- Context detection
@@ -52,13 +54,15 @@ function ZBSpec.describe(name, fn)
     
     currentDescribe = currentDescribe ~= "" and (currentDescribe .. " " .. name) or name
     
-    -- Push new scope for before_each
+    -- Push new scope for before_each and before_all
     table.insert(beforeEachStack, {})
+    table.insert(beforeAllStack, {})
     
     fn()
     
-    -- Pop the scope
+    -- Pop the scopes
     table.remove(beforeEachStack)
+    table.remove(beforeAllStack)
     
     currentDescribe = prevDescribe
     skipCurrentBlock = prevSkip
@@ -71,11 +75,17 @@ function ZBSpec.before_each(fn)
     end
 end
 
+function ZBSpec.before_all(fn)
+    if #beforeAllStack > 0 then
+        table.insert(beforeAllStack[#beforeAllStack], fn)
+    end
+end
+
 -- Async support (requires ?raw=1 on HTTP calls to allow yielding)
 local pendingJobs = {}
 local jobCounter = 0
 
--- Wait until a condition is true, yielding between polls
+-- Wait for a condition to be true, yielding between polls
 -- Each yield returns control to Java; next poll resumes here
 -- Supports optional args for condition; timeout uses default
 function ZBSpec.wait_for(condition, ...)
@@ -93,7 +103,7 @@ function ZBSpec.wait_for(condition, ...)
     end
 end
 
--- Wait until a condition is false, yielding between polls
+-- Wait for a condition to be false, yielding between polls
 -- Supports optional args for condition; timeout uses default
 function ZBSpec.wait_for_not(condition, ...)
     local args = { ... }
@@ -110,7 +120,7 @@ function ZBSpec.wait_for_not(condition, ...)
     end
 end
 
--- Wait until a method on an object returns true
+-- Wait for a method on an object to return true
 -- Usage: wait_for_this(obj, "methodName", ...)
 function ZBSpec.wait_for_this(obj, method, ...)
     if obj == nil then
@@ -124,6 +134,11 @@ function ZBSpec.wait_for_this(obj, method, ...)
         return fn(obj, ...)
     end, ...)
 end
+
+-- Aliases for backward compatibility
+ZBSpec.wait_until = ZBSpec.wait_for
+ZBSpec.wait_until_not = ZBSpec.wait_for_not
+ZBSpec.wait_until_this = ZBSpec.wait_for_this
 
 -- Sleep for N seconds (yields between polls)
 function ZBSpec.sleep(seconds)
@@ -170,13 +185,29 @@ function ZBSpec.runDetailedAsync()
         end
     end
 
+    -- Track which describe blocks have run their before_all
+    local ranBeforeAll = {}
+    
     for _, t in ipairs(testList) do
         ZBSpec.currentTest = t.name
         local testOk = true
         local testErr = nil
         
+        -- Run before_all hooks once per describe block (can yield)
+        if t.before_all and t.describe and not ranBeforeAll[t.describe] then
+            ranBeforeAll[t.describe] = true
+            for _, hook in ipairs(t.before_all) do
+                local ok, err = run_with_yield(hook)
+                if not ok then
+                    testOk = false
+                    testErr = tostring(err)
+                    break
+                end
+            end
+        end
+        
         -- Run before_each hooks (can yield)
-        if t.before_each then
+        if testOk and t.before_each then
             for _, hook in ipairs(t.before_each) do
                 local ok, err = run_with_yield(hook)
                 if not ok then
@@ -299,13 +330,26 @@ function ZBSpec.it(name, fn)
         table.insert(skipped, { name = fullName, reason = skipReason })
     else
         -- Capture all current before_each functions (flattened)
-        local hooks = {}
+        local beforeEachHooks = {}
         for _, scope in ipairs(beforeEachStack) do
             for _, hook in ipairs(scope) do
-                table.insert(hooks, hook)
+                table.insert(beforeEachHooks, hook)
             end
         end
-        table.insert(tests, { name = fullName, fn = fn, before_each = hooks })
+        -- Capture all current before_all functions (flattened)
+        local beforeAllHooks = {}
+        for _, scope in ipairs(beforeAllStack) do
+            for _, hook in ipairs(scope) do
+                table.insert(beforeAllHooks, hook)
+            end
+        end
+        table.insert(tests, {
+            name = fullName,
+            fn = fn,
+            before_each = beforeEachHooks,
+            before_all = beforeAllHooks,
+            describe = currentDescribe
+        })
     end
 end
 
@@ -512,8 +556,18 @@ function ZBSpec.run()
     tests = {}
     skipped = {}
     
+    -- Track which describe blocks have run their before_all
+    local ranBeforeAll = {}
+    
     for _, t in ipairs(testList) do
         ZBSpec.currentTest = t.name
+        -- Run before_all hooks once per describe block
+        if t.before_all and t.describe and not ranBeforeAll[t.describe] then
+            ranBeforeAll[t.describe] = true
+            for _, hook in ipairs(t.before_all) do
+                hook()
+            end
+        end
         -- Run before_each hooks
         if t.before_each then
             for _, hook in ipairs(t.before_each) do
@@ -533,8 +587,18 @@ function ZBSpec.runDetailed()
     local passed = 0
     local failed = 0
     
+    -- Track which describe blocks have run their before_all
+    local ranBeforeAll = {}
+    
     for _, t in ipairs(tests) do
         local ok, err = pcall(function()
+            -- Run before_all hooks once per describe block
+            if t.before_all and t.describe and not ranBeforeAll[t.describe] then
+                ranBeforeAll[t.describe] = true
+                for _, hook in ipairs(t.before_all) do
+                    hook()
+                end
+            end
             -- Run before_each hooks
             if t.before_each then
                 for _, hook in ipairs(t.before_each) do
@@ -576,6 +640,7 @@ function ZBSpec.reset()
     skipCurrentBlock = false
     skipReason = nil
     beforeEachStack = {}
+    beforeAllStack = {}
     -- Don't reset pendingCoroutines or tickHandlerRegistered - those are persistent
 end
 
@@ -586,10 +651,15 @@ it = ZBSpec.it
 test = ZBSpec.test
 assert = ZBSpec.assert
 pending = ZBSpec.pending
+before_all = ZBSpec.before_all
 before_each = ZBSpec.before_each
 wait_for = ZBSpec.wait_for
 wait_for_not = ZBSpec.wait_for_not
 wait_for_this = ZBSpec.wait_for_this
+-- Backward compatibility aliases
+wait_until = ZBSpec.wait_for
+wait_until_not = ZBSpec.wait_for_not
+wait_until_this = ZBSpec.wait_for_this
 sleep = ZBSpec.sleep
 
 return ZBSpec
