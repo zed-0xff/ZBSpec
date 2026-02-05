@@ -137,12 +137,12 @@ end
 
 -- Sleep for N seconds (yields between polls)
 function ZBSpec.sleep(seconds)
-    local startTime = getTimestampMs and getTimestampMs() or (os.time() * 1000)
-    local targetMs = startTime + (seconds * 1000)
+    local startTime = os.time()
+    local target = startTime + seconds
     
     while true do
-        local now = getTimestampMs and getTimestampMs() or (os.time() * 1000)
-        if now >= targetMs then
+        local now = os.time()
+        if now >= target then
             return
         end
         coroutine.yield("pending")
@@ -166,15 +166,29 @@ function ZBSpec.runDetailedAsync()
     skipped = {}
     results.skipped_tests = skippedList
     
+    local function run_with_yield(fn)
+        local co = coroutine.create(fn)
+        while true do
+            local ok, err = coroutine.resume(co)
+            if not ok then
+                return false, tostring(err)
+            end
+            if coroutine.status(co) == "dead" then
+                return true
+            end
+            coroutine.yield("pending")
+        end
+    end
+
     for _, t in ipairs(testList) do
         ZBSpec.currentTest = t.name
         local testOk = true
         local testErr = nil
         
-        -- Run before_each hooks (shouldn't yield, run directly)
+        -- Run before_each hooks (can yield)
         if t.before_each then
             for _, hook in ipairs(t.before_each) do
-                local ok, err = pcall(hook)
+                local ok, err = run_with_yield(hook)
                 if not ok then
                     testOk = false
                     testErr = tostring(err)
@@ -185,19 +199,10 @@ function ZBSpec.runDetailedAsync()
         
         -- Run test in its own coroutine to catch errors via resume
         if testOk then
-            local testCo = coroutine.create(t.fn)
-            while true do
-                local ok, err = coroutine.resume(testCo)
-                if not ok then
-                    testOk = false
-                    testErr = tostring(err)
-                    break
-                end
-                if coroutine.status(testCo) == "dead" then
-                    break  -- Test completed successfully
-                end
-                -- Test yielded - propagate yield up to outer coroutine
-                coroutine.yield("pending")
+            local ok, err = run_with_yield(t.fn)
+            if not ok then
+                testOk = false
+                testErr = tostring(err)
             end
         end
         
@@ -285,6 +290,16 @@ function ZBSpec.poll(jobId)
         pendingJobs[jobId] = nil  -- cleanup
     end
     return response
+end
+
+-- Cancel all pending async jobs (useful before interactive mode)
+function ZBSpec.cancelAllJobs()
+    local count = 0
+    for jobId in pairs(pendingJobs) do
+        pendingJobs[jobId] = nil
+        count = count + 1
+    end
+    return count
 end
 
 function ZBSpec.it(name, fn)

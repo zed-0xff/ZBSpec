@@ -216,6 +216,16 @@ if options[:interactive]
   # Replace hash values with just the clients
   clients.transform_values! { |data| data[:client] }
   
+  # Cancel any pending async jobs from previous test runs
+  clients.each do |instance, client|
+    begin
+      cancelled = client.execute('return ZBSpec.cancelAllJobs()')
+      puts "  ⚠️  Cancelled #{cancelled} pending jobs on #{instance}" if cancelled && cancelled > 0
+    rescue
+      # Ignore - ZBSpec might not be loaded
+    end
+  end
+  
   if clients.empty?
     puts "\n❌ No running instances found. Start a game first with:"
     puts "   zbspec --sp    # Singleplayer"

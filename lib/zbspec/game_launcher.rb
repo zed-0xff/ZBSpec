@@ -201,7 +201,7 @@ module ZBSpec
       FileUtils.mkdir_p(mods_dir)
       # Copy ini files from config dir, preserving subdirectory structure
       config_dir = File.join(__dir__, '../../config')
-      Dir[File.join(config_dir, '**/*.{ini,lua}')].each do |ini_fname|
+      Dir[File.join(config_dir, '**/*.ini')].each do |ini_fname|
         relative_path = ini_fname.sub("#{config_dir}/", '')
         dest_path = File.join(cache_dir, relative_path)
         FileUtils.mkdir_p(File.dirname(dest_path))
