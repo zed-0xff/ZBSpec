@@ -25,6 +25,27 @@ module ZBSpec
       @pid_file ||= File.join(get_cache_dir, 'pz.pid')
     end
 
+    def game_port_file
+      File.join(get_cache_dir, 'game_port.txt')
+    end
+
+    def game_port
+      return nil unless File.exist?(game_port_file)
+      File.read(game_port_file).strip.to_i
+    end
+
+    # Read server's game port from standard location (for client to connect)
+    def read_server_game_port
+      server_port_file = File.expand_path('./tmp/cache_server/game_port.txt')
+      # Wait briefly for server to write port file (race condition with parallel launch)
+      5.times do
+        break if File.exist?(server_port_file)
+        sleep 0.2
+      end
+      return nil unless File.exist?(server_port_file)
+      File.read(server_port_file).strip.to_i
+    end
+
     def start
       # Check for existing PID file
       if File.exist?(pid_file)
@@ -173,7 +194,7 @@ module ZBSpec
         if config['server_ip']
           # Client connecting to server (+connect and value are separate args)
           ip = config['server_ip']
-          port = config['server_port'] || 16261
+          port = config['server_port'] || read_server_game_port || 16261
           password = config['password'] || ''
           args << '+connect'
           args << "#{ip}:#{port}"
@@ -213,13 +234,21 @@ module ZBSpec
       end
       FileUtils.touch(File.join(mods_dir, 'reset-mods-42_00.txt'))
       
-      # Update server ini with mods list
+      # Update server ini with mods list and randomize port
       server_ini = File.join(cache_dir, 'Server', 'servertest.ini')
       if File.exist?(server_ini)
         mods_str = build_mod_list.map{|m| "\\#{m}"}.join(';')
         content = File.read(server_ini)
         content.gsub!(/^Mods=.*$/, "Mods=#{mods_str}")
+        
+        # Randomize server port to avoid conflicts
+        game_port = rand(20000..50000)
+        content.gsub!(/^DefaultPort=.*$/, "DefaultPort=#{game_port}")
+        content.gsub!(/^UDPPort=.*$/, "UDPPort=#{game_port + 1}")
         File.write(server_ini, content)
+        
+        # Write port to file so client can read it
+        File.write(File.join(cache_dir, 'game_port.txt'), game_port.to_s)
       end
 
       # Create symlinks only if they don't exist
