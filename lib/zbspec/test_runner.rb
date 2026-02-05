@@ -58,6 +58,9 @@ module ZBSpec
     def run_lua_specs
       tests = []
       
+      # Load spec_helper.lua once if it exists
+      spec_helper_code = load_spec_helper
+      
       @spec_files.each do |spec_file|
         unless File.exist?(spec_file)
           tests << test("#{spec_file}", false, error: "File not found")
@@ -67,12 +70,12 @@ module ZBSpec
         # Remember log position before test
         log_pos_before = log_file_size
         
-        # Read and execute the spec file
-        lua_code = File.read(spec_file)
+        # Read the spec file, prepending spec_helper if present
+        lua_code = spec_helper_code + File.read(spec_file)
         
         begin
           # Execute the spec file in the game with async support
-          # This handles spec files that use ZBSpec.runAsync() with wait_for/sleep
+          # This handles spec files that use ZBSpec.runAsync() with wait_until/sleep
           result = api_client.execute_async(lua_code, chunkname: spec_file)
           
           # Log raw response if verbosity >= 2
@@ -179,6 +182,17 @@ module ZBSpec
     # Helper to create a test case
     def test(name, passed, error: nil, test_name: nil, assertion_name: nil, assertion_source: nil)
       TestCase.new(name, passed, error: error, test_name: test_name, assertion_name: assertion_name, assertion_source: assertion_source)
+    end
+
+    # Load spec_helper.lua if it exists
+    def load_spec_helper
+      helper_path = 'spec/spec_helper.lua'
+      if File.exist?(helper_path)
+        puts "📦 Loading spec_helper.lua" if verbosity >= 1
+        File.read(helper_path) + "\n"
+      else
+        ''
+      end
     end
 
     # Check if mod is loaded
