@@ -15,7 +15,8 @@ options = {
   spec_files: [],
   verbosity: 0,
   mode: :auto,  # :auto, :sp, :server, :client, :mp
-  interactive: false
+  interactive: false,
+  restart: false
 }
 
 OptionParser.new do |opts|
@@ -53,6 +54,10 @@ OptionParser.new do |opts|
     options[:mode] = :stop
   end
 
+  opts.on('--restart', 'Restart instances before running specs') do
+    options[:restart] = true
+  end
+
   opts.on('-i', '--interactive', 'Interactive Lua console (can combine with --sp/--client/--server)') do
     options[:interactive] = true
   end
@@ -71,12 +76,14 @@ OptionParser.new do |opts|
     puts "  --server    Dedicated server only"
     puts "  --client    MP client only (auto-starts server)"
     puts "  --stop      Stop all running ZBSpec instances"
+    puts "  --restart   Stop instances then start fresh"
     puts "  -i          Interactive Lua console"
     puts "\nExamples:"
     puts "  zbspec                    # Auto-detect mode from spec folders"
     puts "  zbspec --mp               # Force MP mode"
     puts "  zbspec --sp               # Force SP mode"
     puts "  zbspec --stop             # Stop all running instances"
+    puts "  zbspec --restart          # Restart instances before running specs"
     puts "  zbspec -i                 # Interactive console (all instances)"
     puts "  zbspec --client -i        # Interactive console (client only)"
     puts "  zbspec --server -i        # Interactive console (server only)"
@@ -103,6 +110,44 @@ end
 # Load mod-specific test runner if available
 test_runner_class = nil
 
+def stop_instances(cache_dirs)
+  found_any = false
+
+  cache_dirs.each do |cache_dir|
+    pid_file = File.join(cache_dir, 'pz.pid')
+    next unless File.exist?(pid_file)
+
+    found_any = true
+    pid = File.read(pid_file).strip.to_i
+    instance = File.basename(cache_dir)
+
+    begin
+      Process.kill(0, pid)  # Check if process exists
+      puts "  Stopping #{instance} (PID: #{pid})..."
+      Process.kill('TERM', pid)
+      sleep 0.5
+      # Force kill if still running
+      begin
+        Process.kill(0, pid)
+        Process.kill('KILL', pid)
+      rescue Errno::ESRCH
+        # Already dead
+      end
+      puts "  ✓ Stopped #{instance}"
+    rescue Errno::ESRCH
+      puts "  ⚠️  #{instance} already stopped (stale PID file)"
+    end
+
+    File.delete(pid_file)
+
+    # Also clean up port file
+    port_file = File.join(cache_dir, 'zbLuaAPI.txt')
+    File.delete(port_file) if File.exist?(port_file)
+  end
+
+  puts "  No running instances found" unless found_any
+end
+
 if options[:mod_dir]
   spec_paths = [
     File.join(options[:mod_dir], 'spec', 'framework', 'spec_runner.rb'),
@@ -125,6 +170,12 @@ end
 
 # Handle interactive mode
 if options[:interactive]
+  if options[:restart]
+    puts "🔄 Restarting instances..."
+    stop_instances(%w[tmp/cache_sp tmp/cache_client tmp/cache_server])
+    puts "✓ Done"
+  end
+
   puts "🔧 Interactive Lua Console"
   puts "=" * 50
   
@@ -263,6 +314,12 @@ if options[:mode] == :auto
   puts "🔍 Auto-detected mode: #{options[:mode]} (#{mode_reason})"
 end
 
+if options[:restart]
+  puts "🔄 Restarting instances..."
+  stop_instances(%w[tmp/cache_sp tmp/cache_client tmp/cache_server])
+  puts "✓ Done"
+end
+
 # Run the appropriate harness
 FileUtils.mkdir_p('logs')
 
@@ -318,42 +375,7 @@ when :client
   )
 when :stop
   puts "🛑 Stopping all ZBSpec instances..."
-  cache_dirs = %w[tmp/cache_sp tmp/cache_client tmp/cache_server]
-  found_any = false
-  
-  cache_dirs.each do |cache_dir|
-    pid_file = File.join(cache_dir, 'pz.pid')
-    next unless File.exist?(pid_file)
-    
-    found_any = true
-    pid = File.read(pid_file).strip.to_i
-    instance = File.basename(cache_dir)
-    
-    begin
-      Process.kill(0, pid)  # Check if process exists
-      puts "  Stopping #{instance} (PID: #{pid})..."
-      Process.kill('TERM', pid)
-      sleep 0.5
-      # Force kill if still running
-      begin
-        Process.kill(0, pid)
-        Process.kill('KILL', pid)
-      rescue Errno::ESRCH
-        # Already dead
-      end
-      puts "  ✓ Stopped #{instance}"
-    rescue Errno::ESRCH
-      puts "  ⚠️  #{instance} already stopped (stale PID file)"
-    end
-    
-    File.delete(pid_file)
-    
-    # Also clean up port file
-    port_file = File.join(cache_dir, 'zbLuaAPI.txt')
-    File.delete(port_file) if File.exist?(port_file)
-  end
-  
-  puts "  No running instances found" unless found_any
+  stop_instances(%w[tmp/cache_sp tmp/cache_client tmp/cache_server])
   puts "✓ Done"
   exit 0
 else

@@ -82,12 +82,11 @@ function ZBSpec.wait_until(condition, ...)
     local args = { ... }
     local unpackArgs = table.unpack or unpack
     local timeout = 5
-    local startTime = getTimestampMs and getTimestampMs() or (os.time() * 1000)
-    local timeoutMs = timeout * 1000
+    local startTime = os.time()
     
     while not condition(unpackArgs(args)) do
-        local now = getTimestampMs and getTimestampMs() or (os.time() * 1000)
-        if now - startTime > timeoutMs then
+        local now = os.time()
+        if now - startTime > timeout then
             error(string.format("Timeout after %ds waiting for condition", timeout), 2)
         end
         coroutine.yield("pending")
@@ -100,12 +99,11 @@ function ZBSpec.wait_until_not(condition, ...)
     local args = { ... }
     local unpackArgs = table.unpack or unpack
     local timeout = 5
-    local startTime = getTimestampMs and getTimestampMs() or (os.time() * 1000)
-    local timeoutMs = timeout * 1000
+    local startTime = os.time()
     
     while condition(unpackArgs(args)) do
-        local now = getTimestampMs and getTimestampMs() or (os.time() * 1000)
-        if now - startTime > timeoutMs then
+        local now = os.time()
+        if now - startTime > timeout then
             error(string.format("Timeout after %ds waiting for condition", timeout), 2)
         end
         coroutine.yield("pending")
@@ -130,6 +128,11 @@ end
 -- Alias: wait_until_this behaves like wait_for_this
 function ZBSpec.wait_until_this(obj, method, ...)
     return ZBSpec.wait_for_this(obj, method, ...)
+end
+
+-- Alias: wait_for behaves like wait_until
+function ZBSpec.wait_for(condition, ...)
+    return ZBSpec.wait_until(condition, ...)
 end
 
 -- Sleep for N seconds (yields between polls)
@@ -583,6 +586,7 @@ wait_until = ZBSpec.wait_until
 wait_until_not = ZBSpec.wait_until_not
 wait_for_this = ZBSpec.wait_for_this
 wait_until_this = ZBSpec.wait_until_this
+wait_for = ZBSpec.wait_for
 sleep = ZBSpec.sleep
 
 return ZBSpec
