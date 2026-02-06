@@ -417,13 +417,6 @@ ZBSpec.server = {
     )
 }
 
-ZBSpec.player = {
-    describe = makeContextDescribe(
-        function() return not ZBSpec.hasPlayer() end,
-        function() return "requires player (no player available)" end
-    )
-}
-
 ZBSpec.sp = {
     describe = makeContextDescribe(
         function() return ZBSpec.isMultiplayer() end,
