@@ -2,6 +2,7 @@
 
 require 'rake'
 require 'rake/tasklib'
+require 'zbspec'
 
 module ZBSpec
   # Rake tasks for running ZBSpec tests
@@ -10,47 +11,20 @@ module ZBSpec
   #   require 'zbspec/rake_task'
   #   ZBSpec::RakeTask.new
   #
-  # Or with custom options:
-  #   ZBSpec::RakeTask.new(:spec) do |t|
-  #     t.pattern = 'spec/**/*_spec.lua'
-  #     t.verbose = true
-  #   end
-  #
   class RakeTask < ::Rake::TaskLib
-    # Name of the task (default: :spec)
-    attr_accessor :name
+    attr_accessor :name, :config, :verbosity, :mode, :spec_files
 
-    # Glob pattern for spec files (default: 'spec/**/*_spec.lua')
-    attr_accessor :pattern
-
-    # Additional arguments to pass to zbspec
-    attr_accessor :zbspec_args
-
-    # Whether to show verbose output
-    attr_accessor :verbose
-
-    def initialize(name = :spec)
+    def initialize(name = :zbspec)
       @name = name
-      @pattern = 'spec/**/*_spec.lua'
-      @zbspec_args = []
-      @verbose = false
+      @config = 'spec/zbspec.yml'
+      @verbosity = 0
+      @mode = :auto
+      @spec_files = nil
 
       yield self if block_given?
 
-      define
-    end
-
-    private
-
-    def define
       desc 'Run ZBSpec tests'
-      task name do
-        args = ['zbspec']
-        args << '-v' if verbose
-        args.concat(zbspec_args) if zbspec_args.any?
-
-        sh(*args)
-      end
+      task(name) { ZBSpec::CLI.run(config: config, verbosity: verbosity, mode: mode, spec_files: spec_files) }
     end
   end
 end
