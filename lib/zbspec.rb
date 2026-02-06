@@ -7,10 +7,10 @@ require 'uri'
 require 'timeout'
 require 'fileutils'
 
+require_relative 'zbspec/version'
+
 # Main ZBSpec module
 module ZBSpec
-  VERSION = '1.0.0'
-
   class Error < StandardError; end
   class ConfigError < Error; end
   class APIError < Error; end

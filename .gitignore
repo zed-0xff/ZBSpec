@@ -6,3 +6,8 @@
 *.swp
 
 tmp
+
+# Ruby gem
+*.gem
+Gemfile.lock
+pkg/

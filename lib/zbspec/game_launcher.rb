@@ -258,6 +258,17 @@ module ZBSpec
       zbspec_link = File.join(mods_dir, 'ZBSpec')
       FileUtils.ln_sf(File.join(ZBSpec.root, 'mods', 'ZBSpec'), zbspec_link) unless File.exist?(zbspec_link)
 
+      # Symlink mods from ~/Zomboid/Mods/ if they exist there
+      user_mods_dir = File.expand_path('~/Zomboid/Mods')
+      build_mod_list.each do |mod|
+        next if mod == 'ZBSpec' # ZBSpec is handled above
+        user_mod_path = File.join(user_mods_dir, mod)
+        if File.exist?(user_mod_path)
+          mod_link = File.join(mods_dir, mod)
+          FileUtils.ln_sf(user_mod_path, mod_link) unless File.exist?(mod_link)
+        end
+      end
+
       default_txt = []
       default_txt << "VERSION = 1,"
       default_txt << "mods"
@@ -272,6 +283,7 @@ module ZBSpec
     def build_mod_list
       mods = []
       mods << 'ZombieBuddy'
+      mods << 'ZBetterFPS'
       mods << 'ZBSpec'
       
       # Add user mods

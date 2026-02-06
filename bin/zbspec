@@ -4,8 +4,10 @@
 require 'optparse'
 require 'fileutils'
 
-# Add lib to load path
-$LOAD_PATH.unshift File.expand_path('../lib', __dir__)
+# Add lib to load path for development
+lib_path = File.expand_path('../lib', __dir__)
+$LOAD_PATH.unshift(lib_path) unless $LOAD_PATH.include?(lib_path)
+
 require 'zbspec'
 
 # Parse command line options
