@@ -449,10 +449,6 @@ function ZBSpec.assert.is_equal(expected, actual)
     end
 end
 
-function ZBSpec.assert.equals(expected, actual)
-    ZBSpec.assert.is_equal(expected, actual)
-end
-
 function ZBSpec.assert.is_true(value, msg)
     if not value then
         error(msg or "expected true, got false", 2)
