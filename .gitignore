@@ -9,5 +9,4 @@ tmp
 
 # Ruby gem
 *.gem
-Gemfile.lock
 pkg/
