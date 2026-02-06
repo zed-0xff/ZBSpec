@@ -226,6 +226,20 @@ if options[:interactive]
     end
   end
   
+  # Preload spec_helper.lua if it exists
+  spec_helper_path = File.join(Dir.pwd, 'spec', 'spec_helper.lua')
+  if File.exist?(spec_helper_path)
+    spec_helper_code = File.read(spec_helper_path)
+    clients.each do |instance, client|
+      begin
+        client.execute(spec_helper_code)
+      rescue => e
+        puts "  ⚠️  Failed to load spec_helper on #{instance}: #{e.message}"
+      end
+    end
+    puts "  ✓ Loaded spec/spec_helper.lua"
+  end
+  
   if clients.empty?
     puts "\n❌ No running instances found. Start a game first with:"
     puts "   zbspec --sp    # Singleplayer"
