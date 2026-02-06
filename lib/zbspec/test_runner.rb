@@ -60,7 +60,6 @@ module ZBSpec
       
       # Load spec_helper.lua once if it exists
       spec_helper_code = load_spec_helper
-      spec_helper_lines = spec_helper_code.lines.count
       
       @spec_files.each do |spec_file|
         unless File.exist?(spec_file)
@@ -71,8 +70,14 @@ module ZBSpec
         # Remember log position before test
         log_pos_before = log_file_size
         
-        # Read the spec file, prepending spec_helper if present
-        lua_code = spec_helper_code + File.read(spec_file)
+        # Use multipart format: each file gets its own chunkname for correct line numbers
+        # Format: ---FILE:filename---\ncontent\n---FILE:filename2---\ncontent2...
+        # All files execute in same Lua context, but with correct line numbers in logs
+        lua_code = ''
+        if !spec_helper_code.empty?
+          lua_code += "---FILE:spec/spec_helper.lua---\n#{spec_helper_code}"
+        end
+        lua_code += "---FILE:#{spec_file}---\n#{File.read(spec_file)}"
         
         begin
           # Execute the spec file in the game with async support
@@ -101,9 +106,8 @@ module ZBSpec
             end
           end
           # Lua execution error - include file:line if available
-          # Adjust line number to account for prepended spec_helper
-          actual_line = e.line ? [e.line - spec_helper_lines, 1].max : nil
-          location = actual_line ? "#{spec_file}:#{actual_line}" : spec_file
+          # Line numbers are now correct (no adjustment needed) thanks to multipart format
+          location = e.line ? "#{spec_file}:#{e.line}" : spec_file
           tests << test(location, false, 
                         error: e.error_message, 
                         test_name: e.test_name, 
