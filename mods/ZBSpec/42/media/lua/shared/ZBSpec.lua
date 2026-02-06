@@ -663,6 +663,89 @@ function ZBSpec.reset()
     -- Don't reset pendingCoroutines or tickHandlerRegistered - those are persistent
 end
 
+---------------------------------------------
+-- Remote execution (client -> server)
+---------------------------------------------
+local MODULE_NAME = "ZBSpec"
+local evalResults = {}
+local evalIdCounter = 0
+
+-- Execute code on server, fire and forget (no return value)
+function ZBSpec.server_exec(code)
+    if not isClient() then
+        -- On server/SP, just execute locally
+        local fn, err = loadstring(code)
+        if fn then
+            fn()
+        else
+            error("server_exec compile error: " .. tostring(err))
+        end
+        return
+    end
+    
+    sendClientCommand(MODULE_NAME, "exec", { code = code })
+end
+
+-- Execute code on server and wait for result (yields)
+function ZBSpec.server_eval(code)
+    if not isClient() then
+        -- On server/SP, just execute locally
+        local fn, err = loadstring(code)
+        if fn then
+            return fn()
+        else
+            error("server_eval compile error: " .. tostring(err))
+        end
+    end
+    
+    -- Generate unique ID for this request
+    evalIdCounter = evalIdCounter + 1
+    local id = evalIdCounter
+    
+    -- Send request
+    sendClientCommand(MODULE_NAME, "eval", { code = code, id = id })
+    
+    -- Wait for response
+    ZBSpec.wait_for(function()
+        return evalResults[id] ~= nil
+    end)
+    
+    -- Get and clear result
+    local result = evalResults[id]
+    evalResults[id] = nil
+    
+    if result.success then
+        return result.value
+    else
+        error("server_eval error: " .. tostring(result.error))
+    end
+end
+
+-- Execute code on both client and server
+function ZBSpec.all_exec(code)
+    -- Execute locally
+    local fn, err = loadstring(code)
+    if fn then
+        fn()
+    else
+        error("all_exec compile error: " .. tostring(err))
+    end
+    
+    -- Also send to server if we're a client
+    if isClient and isClient() then
+        sendClientCommand(MODULE_NAME, "exec", { code = code })
+    end
+end
+
+-- Handle eval results from server
+if isClient and isClient() then
+    Events.OnServerCommand.Add(function(module, command, args)
+        if module == MODULE_NAME and command == "eval_result" then
+            evalResults[args.id] = args
+        end
+    end)
+end
+
 -- Global aliases for convenience
 describe = ZBSpec.describe
 context = ZBSpec.context
@@ -680,5 +763,9 @@ wait_until = ZBSpec.wait_for
 wait_until_not = ZBSpec.wait_for_not
 wait_until_this = ZBSpec.wait_for_this
 sleep = ZBSpec.sleep
+-- Remote execution
+server_exec = ZBSpec.server_exec
+server_eval = ZBSpec.server_eval
+all_exec = ZBSpec.all_exec
 
 return ZBSpec

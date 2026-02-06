@@ -60,6 +60,7 @@ module ZBSpec
       
       # Load spec_helper.lua once if it exists
       spec_helper_code = load_spec_helper
+      spec_helper_lines = spec_helper_code.lines.count
       
       @spec_files.each do |spec_file|
         unless File.exist?(spec_file)
@@ -100,7 +101,9 @@ module ZBSpec
             end
           end
           # Lua execution error - include file:line if available
-          location = e.line ? "#{spec_file}:#{e.line}" : spec_file
+          # Adjust line number to account for prepended spec_helper
+          actual_line = e.line ? [e.line - spec_helper_lines, 1].max : nil
+          location = actual_line ? "#{spec_file}:#{actual_line}" : spec_file
           tests << test(location, false, 
                         error: e.error_message, 
                         test_name: e.test_name, 

@@ -1,5 +1,9 @@
 package me.zed_0xff.zbspec;
 
+/*
+ * COMMENTED OUT - replaced by sendClientCommand/server_exec pattern in ZBSpec.lua
+ *
+
 import java.util.concurrent.atomic.AtomicReference;
 
 import se.krka.kahlua.integration.LuaReturn;
@@ -17,11 +21,10 @@ import zombie.core.raknet.UdpConnection;
 
 import me.zed_0xff.zombie_buddy.HttpServer;
 
-/**
- * Server command to execute Lua code.
- * Usage: /lua <code>
- * Example: /lua return getOnlinePlayers()
- */
+// Server command to execute Lua code.
+// Usage: /lua <code>
+// Example: /lua return getOnlinePlayers()
+
 @CommandName(name = "lua")
 @CommandHelp(helpText = "Execute Lua code on the server")
 @CommandArgs(varArgs = true)
@@ -81,3 +84,5 @@ public class LuaCommand extends CommandBase {
         }
     }
 }
+
+*/

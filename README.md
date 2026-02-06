@@ -103,7 +103,6 @@ return ZBSpec.run()
 #### Equality
 ```lua
 assert.is_equal(expected, actual)
-assert.equals(expected, actual)  -- alias
 ```
 
 #### Boolean
