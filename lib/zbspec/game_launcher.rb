@@ -256,7 +256,7 @@ module ZBSpec
       FileUtils.ln_sf(File.expand_path(Dir.pwd), this_link) unless File.exist?(this_link)
       
       zbspec_link = File.join(mods_dir, 'ZBSpec')
-      FileUtils.ln_sf(File.join(ZBSpec.root, 'mods', 'ZBSpec'), zbspec_link) unless File.exist?(zbspec_link)
+      FileUtils.ln_s(File.join(ZBSpec.root, 'mods', 'ZBSpec'), zbspec_link, target_directory: false, force: true)
 
       # Symlink mods from ~/Zomboid/Mods/ if they exist there
       user_mods_dir = File.expand_path('~/Zomboid/Mods')
