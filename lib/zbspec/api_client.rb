@@ -68,24 +68,35 @@ module ZBSpec
     end
 
     # Execute Lua code in the game
-    def execute(lua_code, depth: 5, chunkname: nil)
+    def execute(lua_code, depth: 5, chunkname: nil, retries: 3)
       uri = base_uri.dup
       params = ["depth=#{depth}"]
       params << "chunkname=#{URI.encode_www_form_component(chunkname)}" if chunkname
       uri.query = params.join('&')
 
-      response = Net::HTTP.post(uri, lua_code, 'Content-Type' => 'text/plain')
+      attempts = 0
+      begin
+        attempts += 1
+        response = Net::HTTP.post(uri, lua_code, 'Content-Type' => 'text/plain')
 
-      # Handle error responses (500)
-      if response.code == '500'
-        raise LuaError.new(response.body)
+        # Handle error responses (500)
+        if response.code == '500'
+          raise LuaError.new(response.body)
+        end
+
+        return nil unless response.is_a?(Net::HTTPSuccess)
+
+        parse_response(response.body)
+      rescue Errno::ECONNREFUSED, Errno::ECONNRESET
+        nil
+      rescue EOFError, Net::ReadTimeout, Errno::ETIMEDOUT
+        # Transient errors - retry with backoff
+        if attempts < retries
+          sleep 0.2 * attempts
+          retry
+        end
+        nil  # Treat as connection failure after retries exhausted
       end
-
-      return nil unless response.is_a?(Net::HTTPSuccess)
-
-      parse_response(response.body)
-    rescue Errno::ECONNREFUSED, Errno::ECONNRESET
-      nil
     end
 
     # Execute Lua code with async support (for tests that yield)
@@ -258,7 +269,7 @@ module ZBSpec
 
       Timeout.timeout(timeout) do
         loop do
-          player = execute('return getPlayer and (getPlayer() ~= nil)')
+          player = execute('return getPlayer() ~= nil')
           if player
             log "✓ Player spawned"
             return true
