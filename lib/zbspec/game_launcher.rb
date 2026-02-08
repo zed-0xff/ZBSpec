@@ -166,7 +166,7 @@ module ZBSpec
       game_exe = find_executable
 
       args = [game_exe]
-      args << "-javaagent:ZombieBuddy.jar=lua_server_port=random"
+      args << "-javaagent:ZombieBuddy.jar=experimental,lua_server_port=random"
       
       if config['server_mode']
         # Dedicated server uses different main class
