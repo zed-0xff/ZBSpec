@@ -258,7 +258,7 @@ module ZBSpec
 
       Timeout.timeout(timeout) do
         loop do
-          player = execute('return getPlayer() ~= nil')
+          player = execute('return getPlayer and (getPlayer() ~= nil)')
           if player
             log "✓ Player spawned"
             return true

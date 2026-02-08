@@ -52,6 +52,10 @@ OptionParser.new do |opts|
     options[:mode] = :mp
   end
 
+  opts.on('--start', 'Start instance(s) without running tests') do
+    options[:start_only] = true
+  end
+
   opts.on('--stop', 'Stop all running ZBSpec instances') do
     options[:mode] = :stop
   end
@@ -77,6 +81,7 @@ OptionParser.new do |opts|
     puts "  --mp        Multiplayer only (server + client)"
     puts "  --server    Dedicated server only"
     puts "  --client    MP client only (auto-starts server)"
+    puts "  --start     Start instance(s) only (no tests, no player wait)"
     puts "  --stop      Stop all running ZBSpec instances"
     puts "  --restart   Stop instances then start fresh"
     puts "  -i          Interactive Lua console"
@@ -84,6 +89,8 @@ OptionParser.new do |opts|
     puts "  zbspec                    # Auto-detect mode from spec folders"
     puts "  zbspec --mp               # Force MP mode"
     puts "  zbspec --sp               # Force SP mode"
+    puts "  zbspec --start            # Start SP instance only"
+    puts "  zbspec --start --mp       # Start server + client instances"
     puts "  zbspec --stop             # Stop all running instances"
     puts "  zbspec --restart          # Restart instances before running specs"
     puts "  zbspec -i                 # Interactive console (all instances)"
@@ -344,6 +351,93 @@ if options[:restart]
   puts "🔄 Restarting instances..."
   stop_instances(%w[tmp/cache_sp tmp/cache_client tmp/cache_server])
   puts "✓ Done"
+end
+
+# Handle --start mode (start instances without running tests)
+if options[:start_only]
+  puts "🚀 Starting instance(s)..."
+  FileUtils.mkdir_p('tmp/logs')
+  
+  case options[:mode]
+  when :mp, :both
+    # Start both server and client
+    mp_harness = ZBSpec::MPHarness.new(
+      config_path: options[:config],
+      verbosity: options[:verbosity]
+    )
+    
+    mp_harness.send(:launch_instances_parallel)
+    
+    server_timeout = mp_harness.config['server_startup_timeout'] || 60
+    client_timeout = mp_harness.config['startup_timeout'] || 120
+    
+    puts "⏳ Waiting for API..."
+    
+    mp_harness.server_api.discover_port(timeout: server_timeout)
+    mp_harness.server_api.wait_for_ready(timeout: server_timeout)
+    puts "  ✓ Server API ready"
+    
+    mp_harness.client_api.discover_port(timeout: client_timeout)
+    mp_harness.client_api.wait_for_ready(timeout: client_timeout)
+    puts "  ✓ Client API ready"
+    
+  when :server
+    config = ZBSpec::Config.new(options[:config])
+    config['server_mode'] = true
+    config['cache_dir'] = File.expand_path('./tmp/cache_server')
+    
+    launcher = ZBSpec::GameLauncher.new(config, label: 'server', verbosity: options[:verbosity])
+    launcher.start
+    
+    port_file = File.join(config['cache_dir'], 'zbLuaAPI.txt')
+    api = ZBSpec::APIClient.new(port_file: port_file, label: 'server', verbosity: options[:verbosity])
+    
+    timeout = config['server_startup_timeout'] || 60
+    api.discover_port(timeout: timeout)
+    api.wait_for_ready(timeout: timeout)
+    puts "  ✓ Server API ready"
+    
+  when :client
+    mp_harness = ZBSpec::MPHarness.new(
+      config_path: options[:config],
+      verbosity: options[:verbosity],
+      client_only: true
+    )
+    
+    mp_harness.send(:launch_instances_parallel)
+    
+    server_timeout = mp_harness.config['server_startup_timeout'] || 60
+    client_timeout = mp_harness.config['startup_timeout'] || 120
+    
+    puts "⏳ Waiting for API..."
+    
+    mp_harness.server_api.discover_port(timeout: server_timeout)
+    mp_harness.server_api.wait_for_ready(timeout: server_timeout)
+    puts "  ✓ Server API ready"
+    
+    mp_harness.client_api.discover_port(timeout: client_timeout)
+    mp_harness.client_api.wait_for_ready(timeout: client_timeout)
+    puts "  ✓ Client API ready"
+    
+  else
+    # Default: singleplayer
+    config = ZBSpec::Config.new(options[:config])
+    config['cache_dir'] = File.expand_path('./tmp/cache_sp')
+    
+    launcher = ZBSpec::GameLauncher.new(config, verbosity: options[:verbosity])
+    launcher.start
+    
+    port_file = File.join(config['cache_dir'], 'zbLuaAPI.txt')
+    api = ZBSpec::APIClient.new(port_file: port_file, label: 'sp', verbosity: options[:verbosity])
+    
+    timeout = config['startup_timeout'] || 120
+    api.discover_port(timeout: timeout)
+    api.wait_for_ready(timeout: timeout)
+    puts "  ✓ SP API ready"
+  end
+  
+  puts "\n✓ Instance(s) started. Use 'zbspec -i' for interactive console or 'zbspec' to run tests."
+  exit 0
 end
 
 # Run the appropriate harness
