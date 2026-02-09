@@ -18,7 +18,8 @@ options = {
   verbosity: 0,
   mode: :auto,  # :auto, :sp, :server, :client, :mp
   interactive: false,
-  restart: false
+  restart: false,
+  restart_only: false
 }
 
 OptionParser.new do |opts|
@@ -64,6 +65,10 @@ OptionParser.new do |opts|
     options[:restart] = true
   end
 
+  opts.on('--restart-only', 'Restart instances but do not run tests') do
+    options[:restart_only] = true
+  end
+
   opts.on('-i', '--interactive', 'Interactive Lua console (can combine with --sp/--client/--server)') do
     options[:interactive] = true
   end
@@ -83,7 +88,8 @@ OptionParser.new do |opts|
     puts "  --client    MP client only (auto-starts server)"
     puts "  --start     Start instance(s) only (no tests, no player wait)"
     puts "  --stop      Stop all running ZBSpec instances"
-    puts "  --restart   Stop instances then start fresh"
+    puts "  --restart      Stop instances then start fresh"
+    puts "  --restart-only Restart instances only (no tests)"
     puts "  -i          Interactive Lua console"
     puts "\nExamples:"
     puts "  zbspec                    # Auto-detect mode from spec folders"
@@ -93,6 +99,7 @@ OptionParser.new do |opts|
     puts "  zbspec --start --mp       # Start server + client instances"
     puts "  zbspec --stop             # Stop all running instances"
     puts "  zbspec --restart          # Restart instances before running specs"
+    puts "  zbspec --restart-only     # Restart instances only (no tests)"
     puts "  zbspec -i                 # Interactive console (all instances)"
     puts "  zbspec --client -i        # Interactive console (client only)"
     puts "  zbspec --server -i        # Interactive console (server only)"
@@ -351,6 +358,13 @@ if options[:restart]
   puts "🔄 Restarting instances..."
   stop_instances(%w[tmp/cache_sp tmp/cache_client tmp/cache_server])
   puts "✓ Done"
+end
+
+# --restart-only: stop then start instances (no tests)
+if options[:restart_only]
+  puts "🔄 Restarting instances (no tests)..."
+  stop_instances(%w[tmp/cache_sp tmp/cache_client tmp/cache_server])
+  options[:start_only] = true
 end
 
 # Handle --start mode (start instances without running tests)

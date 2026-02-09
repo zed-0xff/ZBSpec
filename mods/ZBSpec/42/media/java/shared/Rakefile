@@ -1,0 +1,8 @@
+task :build do
+  env = {
+    "JAVA_HOME" => "/Library/Java/JavaVirtualMachines/openjdk-24.jdk/Contents/Home"
+  }
+  sh env, "gradle build"
+end
+
+task :default => :build
