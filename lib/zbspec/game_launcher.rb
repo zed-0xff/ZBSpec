@@ -221,16 +221,24 @@ module ZBSpec
       end
     end
 
+    def game_config_dir
+      game_version = config['game_versions']&.first || 'default'
+      dir = File.join(ZBSpec.root, 'game_configs', game_version.to_s)
+      raise GameLaunchError, "Game config dir not found: #{dir} (game_version=#{game_version.inspect})" unless File.directory?(dir)
+      dir
+    end
+
     def init_cachedir(cache_dir)
       mods_dir = File.join(cache_dir, 'mods')
       FileUtils.mkdir_p(mods_dir)
-      # Copy ini files from config dir, preserving subdirectory structure
-      config_dir = File.join(__dir__, '../../config')
-      Dir[File.join(config_dir, '**/*.ini')].each do |ini_fname|
-        relative_path = ini_fname.sub("#{config_dir}/", '')
+      # Copy ini and lua files from game_configs/<game_version>, preserving structure
+      config_dir = game_config_dir
+      Dir[File.join(config_dir, '**/*.{ini,lua}')].each do |src|
+        next unless File.file?(src)
+        relative_path = src.sub("#{config_dir}/", '').sub(%r{\A/}, '')
         dest_path = File.join(cache_dir, relative_path)
         FileUtils.mkdir_p(File.dirname(dest_path))
-        FileUtils.cp(ini_fname, dest_path)
+        FileUtils.cp(src, dest_path)
       end
       FileUtils.touch(File.join(mods_dir, 'reset-mods-42_00.txt'))
       

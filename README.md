@@ -260,6 +260,10 @@ auto_shutdown: false
 # Path to PZ (for auto-launch on macOS)
 game_path: /Applications/Project Zomboid.app
 
+# Game version(s) to run against (default: ["default"])
+game_versions:
+  - default
+
 # Enable debug mode
 debug: true
 
