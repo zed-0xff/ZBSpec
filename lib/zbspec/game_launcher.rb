@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 require 'fileutils'
+require 'erb'
 
 module ZBSpec
   # Handles launching and stopping the game
@@ -289,12 +290,19 @@ module ZBSpec
       FileUtils.mkdir_p(mods_dir)
       # Copy ini and lua files from game_configs/<game_version>, preserving structure
       config_dir = game_config_dir
-      Dir[File.join(config_dir, '**/*.{ini,lua,txt}')].each do |src|
+      mods = build_mod_list
+      Dir[File.join(config_dir, '**/*.{ini,lua,txt,erb}')].each do |src|
         next unless File.file?(src)
         relative_path = src.sub("#{config_dir}/", '').sub(%r{\A/}, '')
         dest_path = File.join(cache_dir, relative_path)
+        dest_path = dest_path.sub(/\.erb\z/, '') if relative_path.end_with?('.erb')
         FileUtils.mkdir_p(File.dirname(dest_path))
-        FileUtils.cp(src, dest_path)
+        if src.end_with?('.erb')
+          template = ERB.new(File.read(src), trim_mode: '-')
+          File.write(dest_path, template.result_with_hash(mods: mods))
+        else
+          FileUtils.cp(src, dest_path)
+        end
       end
       
       # Update server ini with mods list and randomize port
@@ -321,41 +329,50 @@ module ZBSpec
       zbspec_link = File.join(mods_dir, 'ZBSpec')
       FileUtils.ln_s(File.join(ZBSpec.root, 'mods', 'ZBSpec'), zbspec_link, target_directory: false, force: true)
 
-      # Symlink mods from ~/Zomboid/Mods/ if they exist there
+      # Symlink mods: Steam workshop (by steam_id) or ~/Zomboid/Mods/
       user_mods_dir = File.expand_path('~/Zomboid/Mods')
+      steam_mods = config_mod_entries.select { |e| e['steam_id'] }.to_h { |e| [e['name'], e['steam_id']] }
       build_mod_list.each do |mod|
         next if mod == 'ZBSpec' # ZBSpec is handled above
-        user_mod_path = File.join(user_mods_dir, mod)
-        if File.exist?(user_mod_path)
-          mod_link = File.join(mods_dir, mod)
-          FileUtils.ln_sf(user_mod_path, mod_link) unless File.exist?(mod_link)
+        mod_link = File.join(mods_dir, mod)
+        if (steam_id = steam_mods[mod])
+          src = steam_workshop_mod_path(steam_id, mod)
+          unless File.exist?(src)
+            raise GameLaunchError, "Steam workshop mod not installed: #{mod} (steam_id=#{steam_id}). Expected: #{src}"
+          end
+          FileUtils.ln_sf(src, mod_link)
+        else
+          user_mod_path = File.join(user_mods_dir, mod)
+          if File.exist?(user_mod_path)
+            FileUtils.ln_sf(user_mod_path, mod_link) unless File.exist?(mod_link)
+          end
         end
       end
 
-      default_txt = []
-      default_txt << "VERSION = 1,"
-      default_txt << "mods"
-      default_txt << "{"
-      build_mod_list.each do |mod|
-        default_txt << "    mod = \\#{mod},"
+    end
+
+    def steam_workshop_mod_path(steam_id, mod_name)
+      File.expand_path(
+        "~/Library/Application Support/Steam/steamapps/workshop/content/108600/#{steam_id}/mods/#{mod_name}"
+      )
+    end
+
+    # Config mods as list of hashes with 'name' and optional 'steam_id'
+    def config_mod_entries
+      @config_mod_entries ||= Array(config['mods']).map do |entry|
+        if entry.is_a?(Hash)
+          { 'name' => entry['name'].to_s, 'steam_id' => entry['steam_id'] }
+        else
+          { 'name' => entry.to_s, 'steam_id' => nil }
+        end
       end
-      default_txt << "}"
-      File.write(File.join(mods_dir, 'default.txt'), default_txt.join("\n"))
     end
 
     def build_mod_list
       mods = []
       mods << 'ZombieBuddy'
-      mods << 'ZBetterFPS'
       mods << 'ZBSpec'
-      
-      # Add user mods
-      if config['mods']&.any?
-        config['mods'].each do |mod|
-          mods << mod
-        end
-      end
-      
+      config_mod_entries.each { |e| mods << e['name'] }
       mods.uniq
     end
 

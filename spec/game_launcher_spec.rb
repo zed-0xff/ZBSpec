@@ -105,42 +105,41 @@ RSpec.describe ZBSpec::GameLauncher do
       expect(mod_list.first).to eq('ZombieBuddy')
     end
 
-    it 'includes ZBetterFPS and ZBSpec after ZombieBuddy' do
+    it 'includes ZBSpec after ZombieBuddy' do
       mod_list = launcher.send(:build_mod_list)
       expect(mod_list[0]).to eq('ZombieBuddy')
-      expect(mod_list[1]).to eq('ZBetterFPS')
-      expect(mod_list[2]).to eq('ZBSpec')
+      expect(mod_list[1]).to eq('ZBSpec')
     end
 
     it 'adds user mods after default mods' do
       mod_list = launcher.send(:build_mod_list)
-      expect(mod_list).to eq(['ZombieBuddy', 'ZBetterFPS', 'ZBSpec', 'TestMod', 'AnotherMod'])
+      expect(mod_list).to eq(['ZombieBuddy', 'ZBSpec', 'TestMod', 'AnotherMod'])
     end
 
     it 'does not duplicate ZombieBuddy if user includes it' do
       config['mods'] = ['ZombieBuddy', 'TestMod']
       mod_list = launcher.send(:build_mod_list)
       expect(mod_list.count('ZombieBuddy')).to eq(1)
-      expect(mod_list).to eq(['ZombieBuddy', 'ZBetterFPS', 'ZBSpec', 'TestMod'])
+      expect(mod_list).to eq(['ZombieBuddy', 'ZBSpec', 'TestMod'])
     end
 
     it 'does not duplicate ZBSpec if user includes it' do
       config['mods'] = ['ZBSpec', 'TestMod']
       mod_list = launcher.send(:build_mod_list)
       expect(mod_list.count('ZBSpec')).to eq(1)
-      expect(mod_list).to eq(['ZombieBuddy', 'ZBetterFPS', 'ZBSpec', 'TestMod'])
+      expect(mod_list).to eq(['ZombieBuddy', 'ZBSpec', 'TestMod'])
     end
 
     it 'works with no user mods' do
       config['mods'] = []
       mod_list = launcher.send(:build_mod_list)
-      expect(mod_list).to eq(['ZombieBuddy', 'ZBetterFPS', 'ZBSpec'])
+      expect(mod_list).to eq(['ZombieBuddy', 'ZBSpec'])
     end
 
     it 'works with nil mods' do
       config['mods'] = nil
       mod_list = launcher.send(:build_mod_list)
-      expect(mod_list).to eq(['ZombieBuddy', 'ZBetterFPS', 'ZBSpec'])
+      expect(mod_list).to eq(['ZombieBuddy', 'ZBSpec'])
     end
   end
 end

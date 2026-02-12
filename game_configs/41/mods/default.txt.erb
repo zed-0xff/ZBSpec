@@ -1,0 +1,12 @@
+VERSION = 1,
+
+mods
+{
+<%- mods.uniq.each do |mod_id| -%>
+    mod = <%= mod_id %>,
+<%- end -%>
+}
+
+maps
+{
+}
