@@ -14,13 +14,10 @@ module ZBSpec
     ].freeze
 
     DEFAULT_CONFIG = {
-      'api_port' => 4445,
       'startup_timeout' => 120,         # Client/SP startup timeout
       'server_startup_timeout' => 60,   # Server startup timeout (faster)
       'auto_shutdown' => false,
-      'use_running_game' => false,
       'game_path' => nil,  # Auto-detect by default
-      'server_mode' => false,
       'debug' => true,
       'mods' => [],
       'spec_glob' => 'spec/**/*_spec.lua'

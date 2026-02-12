@@ -1,43 +1,24 @@
 ---
 # Example ZBSpec configuration
-# Copy to your mod's spec/zbspec.yml
+# Copy to your mod's spec/zbspec.yml (or run: zbspec --init)
 
-# ZombieBuddy API port (will use random port automatically)
-api_port: 4445
-
-# Seconds to wait for game startup
 startup_timeout: 120
-
-# Stop game after specs complete
 auto_shutdown: false
-
-# Use already-running game instead of launching (default: false)
-use_running_game: false
-
-# Path to Project Zomboid (for auto-launch)
 game_path: /Applications/Project Zomboid.app
-
-# Launch as server (use --server CLI flag instead)
-server_mode: false
-
-# Enable debug mode
 debug: true
-
-# Spec file discovery pattern (glob)
 spec_glob: spec/**/*_spec.lua
 
-# Your mod(s) to test
-# Note: ZombieBuddy and ZBSpec are automatically included
+# Your mod(s) to test (ZombieBuddy and ZBSpec are auto-included)
 mods:
   - YourModName
 
-# Multiplayer settings (for --mp and --client modes)
+# Optional: multiplayer (for --mp and --client)
 # server_name: ZBSpecServer
 # server_ip: 127.0.0.1
 # server_port: 16261
 # username: ZBSpecPlayer
 # password: ""
 
-# Use existing running instances for MP testing
+# Optional: use already-running instances for MP
 # use_running_server: false
 # use_running_client: false

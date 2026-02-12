@@ -17,10 +17,6 @@ RSpec.describe ZBSpec::Config do
   end
 
   describe 'DEFAULT_CONFIG' do
-    it 'uses port 4445 by default' do
-      expect(ZBSpec::Config::DEFAULT_CONFIG['api_port']).to eq(4445)
-    end
-
     it 'auto-detects game path' do
       expect(ZBSpec::Config::DEFAULT_CONFIG['game_path']).to be_nil
     end
@@ -30,7 +26,7 @@ RSpec.describe ZBSpec::Config do
     let(:temp_config) { Tempfile.new(['zbspec', '.yml']) }
     
     before do
-      temp_config.write("api_port: 4445\nmods: []\n")
+      temp_config.write("mods: []\n")
       temp_config.close
     end
 

@@ -90,11 +90,7 @@ module ZBSpec
     end
 
     def launch_game_if_needed
-      if config['use_running_game']
-        puts '✓ Using already-running game'
-      else
-        launcher.start
-      end
+      launcher.start
     end
 
     def handle_error(error)

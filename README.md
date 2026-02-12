@@ -33,9 +33,7 @@ A testing framework for Project Zomboid mods. Write specs in Lua with familiar `
 Create `spec/zbspec.yml` in your mod directory:
 
 ```yaml
-api_port: 4445
 startup_timeout: 120
-use_running_game: true
 spec_glob: spec/**/*_spec.lua
 
 mods:
@@ -253,23 +251,14 @@ end)
 Full `zbspec.yml` options:
 
 ```yaml
-# API port (ZombieBuddy)
-api_port: 4445
-
 # Timeout for game startup (seconds)
 startup_timeout: 120
-
-# Use already-running game instead of launching
-use_running_game: true
 
 # Auto-shutdown game after specs
 auto_shutdown: false
 
 # Path to PZ (for auto-launch on macOS)
 game_path: /Applications/Project Zomboid.app
-
-# Launch as server
-server_mode: false
 
 # Enable debug mode
 debug: true
@@ -350,7 +339,6 @@ zbspec --client     # Client specs only (server must be running)
 ```
 🚀 PZ Spec Harness Starting
 ==================================================
-✓ Using already-running game
 ✓ API ready
 
 🧪 Running Spec Suite
