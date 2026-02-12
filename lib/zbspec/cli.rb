@@ -197,6 +197,8 @@ module ZBSpec
           - default
         debug: true
         spec_glob: spec/**/*_spec.lua
+        # Required mods (ZombieBuddy, ZBSpec, and the mod under test are always included).
+        # Mod id is case-sensitive (must match the id= in the mod's mod.info).
         mods:
           - YourModName
       YAML

@@ -251,6 +251,11 @@ module ZBSpec
       end
     end
 
+    # ZombieBuddy mod root (parent of the directory containing the JAR, e.g. .../ZombieBuddy)
+    def zombiebuddy_mod_dir
+      File.expand_path(File.join(File.dirname(zombiebuddy_jar), '..'))
+    end
+
     def default_cache_dir
       v = game_version_name
       if config['server_mode']
@@ -322,20 +327,24 @@ module ZBSpec
         File.write(File.join(cache_dir, 'game_port.txt'), game_port.to_s)
       end
 
-      # Create symlinks only if they don't exist
-      this_link = File.join(mods_dir, 'this')
-      FileUtils.ln_sf(File.expand_path(Dir.pwd), this_link) unless File.exist?(this_link)
-      
+      # Create symlinks for mods (no default "this" symlink; use mods: [{ id: "YourMod", path: "." }] to link CWD)
       zbspec_link = File.join(mods_dir, 'ZBSpec')
       FileUtils.ln_s(File.join(ZBSpec.root, 'mods', 'ZBSpec'), zbspec_link, target_directory: false, force: true)
 
-      # Symlink mods: Steam workshop (by steam_id) or ~/Zomboid/Mods/
+      zombiebuddy_link = File.join(mods_dir, 'ZombieBuddy')
+      FileUtils.ln_sf(zombiebuddy_mod_dir, zombiebuddy_link)
+
+      # Symlink mods: path (explicit), Steam workshop (steam_id), or ~/Zomboid/Mods/
       user_mods_dir = File.expand_path('~/Zomboid/Mods')
-      steam_mods = config_mod_entries.select { |e| e['steam_id'] }.to_h { |e| [e['name'], e['steam_id']] }
-      build_mod_list.each do |mod|
+      config_mod_entries.each do |entry|
+        mod = entry['name']
         next if mod == 'ZBSpec' # ZBSpec is handled above
         mod_link = File.join(mods_dir, mod)
-        if (steam_id = steam_mods[mod])
+        if entry['path']
+          src = File.expand_path(entry['path'])
+          raise GameLaunchError, "Mod path not found: #{entry['path']} (resolved: #{src})" unless File.exist?(src)
+          FileUtils.ln_sf(src, mod_link)
+        elsif (steam_id = entry['steam_id'])
           src = steam_workshop_mod_path(steam_id, mod)
           unless File.exist?(src)
             raise GameLaunchError, "Steam workshop mod not installed: #{mod} (steam_id=#{steam_id}). Expected: #{src}"
@@ -343,9 +352,7 @@ module ZBSpec
           FileUtils.ln_sf(src, mod_link)
         else
           user_mod_path = File.join(user_mods_dir, mod)
-          if File.exist?(user_mod_path)
-            FileUtils.ln_sf(user_mod_path, mod_link) unless File.exist?(mod_link)
-          end
+          FileUtils.ln_sf(user_mod_path, mod_link) if File.exist?(user_mod_path) && !File.exist?(mod_link)
         end
       end
 
@@ -357,13 +364,14 @@ module ZBSpec
       )
     end
 
-    # Config mods as list of hashes with 'name' and optional 'steam_id'
+    # Config mods as list of hashes with 'id' (or 'name'), optional 'steam_id', optional 'path'
     def config_mod_entries
       @config_mod_entries ||= Array(config['mods']).map do |entry|
         if entry.is_a?(Hash)
-          { 'name' => entry['name'].to_s, 'steam_id' => entry['steam_id'] }
+          mod_id = (entry['id'] || entry['name']).to_s
+          { 'name' => mod_id, 'steam_id' => entry['steam_id'], 'path' => entry['path'] }
         else
-          { 'name' => entry.to_s, 'steam_id' => nil }
+          { 'name' => entry.to_s, 'steam_id' => nil, 'path' => nil }
         end
       end
     end

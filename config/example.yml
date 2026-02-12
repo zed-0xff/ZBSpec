@@ -14,7 +14,7 @@ game_versions:
 debug: true
 spec_glob: spec/**/*_spec.lua
 
-# Your mod(s) to test (ZombieBuddy and ZBSpec are auto-included)
+# Required mods (ZombieBuddy, ZBSpec, and the mod under test are always included)
 mods:
   - YourModName
 

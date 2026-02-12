@@ -75,13 +75,26 @@ module ZBSpec
       false
     end
 
-    # Returns false if process has exited (including zombie). Uses wait(WNOHANG) so we detect exit immediately.
+    # Returns false if process has exited. Works for both child processes (we spawned) and
+    # reused PIDs from a previous run (not our child). For children we use wait(WNOHANG);
+    # for non-children Process.wait raises ECHILD and we fall back to kill(0, pid).
     def process_alive?(pid)
       return false unless pid && pid > 0
       reaped = Process.wait(pid, Process::WNOHANG)
-      reaped.nil?  # nil = still running; non-nil = exited (we reaped it)
-    rescue Errno::ESRCH, Errno::ECHILD
+      return false if reaped == pid  # our child exited
+      return true if reaped.nil?     # our child still running
+      # Not our child (e.g. reused PID from previous zbspec run)
+      Process.kill(0, pid)
+      true
+    rescue Errno::ESRCH
       false
+    rescue Errno::ECHILD
+      # PID is from a previous run; current process is not the parent
+      Process.kill(0, pid)
+      true
+    rescue Errno::EPERM
+      # Process exists but we can't signal it; assume alive
+      true
     end
 
     # Execute Lua code in the game

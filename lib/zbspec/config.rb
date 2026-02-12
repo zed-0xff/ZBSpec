@@ -60,7 +60,6 @@ module ZBSpec
       
       if path
         @data['game_path'] = path
-        puts "✓ Auto-detected game at: #{path}"
       else
         warn "⚠️  Could not auto-detect Project Zomboid installation"
         warn "   Checked locations:"
