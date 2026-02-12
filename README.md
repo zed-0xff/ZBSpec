@@ -276,10 +276,6 @@ server_ip: 127.0.0.1
 server_port: 16261
 username: ZBSpecPlayer
 password: ""
-
-# Use existing running instances for MP testing
-use_running_server: false
-use_running_client: false
 ```
 
 ## Spec Folder Structure

@@ -18,7 +18,3 @@ mods:
 # server_port: 16261
 # username: ZBSpecPlayer
 # password: ""
-
-# Optional: use already-running instances for MP
-# use_running_server: false
-# use_running_client: false

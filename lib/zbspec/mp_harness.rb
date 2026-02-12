@@ -85,24 +85,14 @@ module ZBSpec
       puts "\n🚀 Launching instances..." if @verbosity > 0
       
       threads = []
-      
-      # Launch server
-      unless @config['use_running_server']
-        threads << Thread.new do
-          @server_launcher.start
-          puts "  ✓ Server started (PID: #{@server_launcher.pid})" if @verbosity > 0
-        end
+      threads << Thread.new do
+        @server_launcher.start
+        puts "  ✓ Server started (PID: #{@server_launcher.pid})" if @verbosity > 0
       end
-      
-      # Launch client
-      unless @config['use_running_client']
-        threads << Thread.new do
-          @client_launcher.start
-          puts "  ✓ Client started (PID: #{@client_launcher.pid})" if @verbosity > 0
-        end
+      threads << Thread.new do
+        @client_launcher.start
+        puts "  ✓ Client started (PID: #{@client_launcher.pid})" if @verbosity > 0
       end
-      
-      # Wait for all launches to complete
       threads.each(&:join)
     end
 
@@ -112,52 +102,31 @@ module ZBSpec
       
       puts "⏳ Waiting for instances..." if @verbosity > 0
       
-      # Wait for both in parallel threads, but server must be ready before client can connect
       server_ready = false
       client_error = nil
       
       threads = []
-      
-      # Server wait thread
-      unless @config['use_running_server']
-        threads << Thread.new do
-          @server_api.discover_port(timeout: server_timeout)
-          @server_api.wait_for_ready(timeout: server_timeout)
-          
-          # Sanity check: verify it's actually a server
-          is_server = @server_api.execute('return isServer()')
-          raise "Server instance is not running as server! isServer()=#{is_server}" unless is_server
-          
-          server_ready = true
-          puts "  ✓ Server ready" if @verbosity > 0
-        end
-      else
+      threads << Thread.new do
+        @server_api.discover_port(timeout: server_timeout)
+        @server_api.wait_for_ready(timeout: server_timeout)
+        is_server = @server_api.execute('return isServer()')
+        raise "Server instance is not running as server! isServer()=#{is_server}" unless is_server
         server_ready = true
+        puts "  ✓ Server ready" if @verbosity > 0
+      end
+      threads << Thread.new do
+        sleep 0.5 until server_ready
+        @client_api.discover_port(timeout: client_timeout)
+        @client_api.wait_for_ready(timeout: client_timeout)
+        @client_api.wait_for_player(timeout: client_timeout)
+        is_client = @client_api.execute('return isClient()')
+        raise "Client instance is not running as client! isClient()=#{is_client}" unless is_client
+        puts "  ✓ Client ready" if @verbosity > 0
+      rescue => e
+        client_error = e
       end
       
-      # Client wait thread (waits for server first)
-      unless @config['use_running_client']
-        threads << Thread.new do
-          # Wait for server to be ready first
-          sleep 0.5 until server_ready
-          
-          @client_api.discover_port(timeout: client_timeout)
-          @client_api.wait_for_ready(timeout: client_timeout)
-          @client_api.wait_for_player(timeout: client_timeout)
-          
-          # Sanity check: verify it's actually a client
-          is_client = @client_api.execute('return isClient()')
-          raise "Client instance is not running as client! isClient()=#{is_client}" unless is_client
-          
-          puts "  ✓ Client ready" if @verbosity > 0
-        rescue => e
-          client_error = e
-        end
-      end
-      
-      # Wait for all threads
       threads.each(&:join)
-      
       raise client_error if client_error
     end
 
