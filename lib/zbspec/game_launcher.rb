@@ -36,7 +36,8 @@ module ZBSpec
 
     # Read server's game port from standard location (for client to connect)
     def read_server_game_port
-      server_port_file = File.expand_path('./tmp/cache_server/game_port.txt')
+      v = game_version_name
+      server_port_file = File.expand_path("./tmp/cache_server_#{v}/game_port.txt")
       # Wait briefly for server to write port file (race condition with parallel launch)
       5.times do
         break if File.exist?(server_port_file)
@@ -78,8 +79,11 @@ module ZBSpec
       log_file = setup_log_file
 
       # Launch game in background, redirect stdout and stderr to log
+      spawn_opts = { out: log_file, err: log_file }
+      spawn_opts[:chdir] = @mac_game_root
+      log "game root: #{@mac_game_root}"
       log "Launching with args: #{args.inspect}"
-      @pid = spawn(*args, out: log_file, err: log_file)
+      @pid = spawn(*args, **spawn_opts)
       @running = true
 
       # Write PID file
@@ -149,82 +153,134 @@ module ZBSpec
     end
 
     def setup_log_file
-      FileUtils.mkdir_p('tmp/logs')
-      instance = config['instance_name'] || 'default'
-      timestamp = Time.now.strftime('%Y%m%d_%H%M%S')
-      log_file = File.expand_path("tmp/logs/#{instance}_#{timestamp}.log")
-      
-      # Create symlink to latest log for this instance
-      latest_link = File.expand_path("tmp/logs/#{instance}.log")
-      FileUtils.rm_f(latest_link)
-      FileUtils.ln_sf(File.basename(log_file), latest_link)
-      
-      log_file
+      cache_dir = get_cache_dir
+      FileUtils.mkdir_p(cache_dir)
+      File.join(cache_dir, 'std.log')
     end
 
     def build_launch_args
+      @mac_java_home, @mac_game_root = resolve_mac_paths if mac?
       game_exe = find_executable
 
-      args = [game_exe]
-      args << "-javaagent:ZombieBuddy.jar=experimental,lua_server_port=random"
-      
-      if config['server_mode']
-        # Dedicated server uses different main class
-        args << 'zombie.network.GameServer'
+      if mac?
+        build_mac_launch_args(game_exe)
+      else
+        build_other_launch_args(game_exe)
       end
-      
-      args << '--'
-      
+    end
+
+    def build_mac_launch_args(java_bin)
       cache_dir = File.expand_path(config['cache_dir'] || default_cache_dir)
       init_cachedir(cache_dir)
 
+      # Classpath: all *.jar in GAME_ROOT plus .
+      jars = Dir[File.join(@mac_game_root, '*.jar')].map { |f| File.basename(f) }
+      classpath = (jars + ['.']).join(':')
+
+      args = [
+        java_bin,
+        '--enable-native-access=ALL-UNNAMED',
+        '-Djava.awt.headless=true',
+        '-XstartOnFirstThread',
+        '-Dzomboid.steam=0',
+        '-Dzomboid.znetlog=1',
+        '-Xmx3072m',
+        '-XX:+UseZGC',
+        '-XX:-OmitStackTraceInFastThrow',
+        "-Djava.library.path=.:#{File.join(@mac_java_home, 'lib')}",
+        "-javaagent:#{zombiebuddy_jar}=experimental,lua_server_port=random",
+        '-classpath', classpath
+      ]
+
+      args << (config['server_mode'] ? 'zombie.network.GameServer' : 'zombie.gameStates.MainScreenState')
+      args << '--'
       args << "-cachedir=#{cache_dir}"
-      
+
       if config['server_mode']
-        # Server-specific options
         server_name = config['server_name'] || 'ZBSpecServer'
-        args << server_name
-        args << '-nosteam'
-        args << '-adminpassword'
-        args << (config['admin_password'] || 'zbspec')
+        args << server_name << '-nosteam' << '-adminpassword' << (config['admin_password'] || 'zbspec')
       else
-        # Client/SP-specific options
         args.concat(['-novoip', '-nosound', '-nosteam', '-no-worldgen', '-no-foraging', '-no-attachments'])
-        
         if config['server_ip']
-          # Client connecting to server (+connect and value are separate args)
           ip = config['server_ip']
           port = config['server_port'] || read_server_game_port || 16261
           password = config['password'] || ''
-          args << '+connect'
-          args << "#{ip}:#{port}"
-          unless password.empty?
-            args << '+password'
-            args << password
-          end
+          args << '+connect' << "#{ip}:#{port}"
+          args << '+password' << password unless password.empty?
         else
-          # SP only - debug mode
           args << '-debug' if config['debug']
         end
       end
-      
       args
     end
 
-    def default_cache_dir
+    def build_other_launch_args(game_exe)
+      args = [game_exe, "-javaagent:#{zombiebuddy_jar}=experimental,lua_server_port=random"]
+      args << 'zombie.network.GameServer' if config['server_mode']
+      args << '--'
+      cache_dir = File.expand_path(config['cache_dir'] || default_cache_dir)
+      init_cachedir(cache_dir)
+      args << "-cachedir=#{cache_dir}"
       if config['server_mode']
-        './tmp/cache_server'
-      elsif config['server_ip']
-        './tmp/cache_client'
+        args << (config['server_name'] || 'ZBSpecServer') << '-nosteam' << '-adminpassword' << (config['admin_password'] || 'zbspec')
       else
-        './tmp/cache_sp'
+        args.concat(['-novoip', '-nosound', '-nosteam', '-no-worldgen', '-no-foraging', '-no-attachments'])
+        if config['server_ip']
+          ip, port = config['server_ip'], config['server_port'] || read_server_game_port || 16261
+          args << '+connect' << "#{ip}:#{port}"
+          args << '+password' << (config['password'] || '') unless (config['password'] || '').empty?
+        else
+          args << '-debug' if config['debug']
+        end
+      end
+      args
+    end
+
+    def zombiebuddy_jar
+      @zombiebuddy_jar ||= begin
+        candidates = [
+          File.expand_path('~/projects/zomboid/mods/ZombieBuddy/libs/ZombieBuddy.jar'),
+          File.expand_path('~/Library/Application Support/Steam/steamapps/workshop/content/108600/3619862853/mods/ZombieBuddy/libs/ZombieBuddy.jar')
+        ]
+        path = candidates.find { |p| File.file?(p) }
+        unless path
+          raise GameLaunchError, "ZombieBuddy.jar not found. Checked:\n  #{candidates.join("\n  ")}"
+        end
+        path
       end
     end
 
+    def default_cache_dir
+      v = game_version_name
+      if config['server_mode']
+        "./tmp/cache_server_#{v}"
+      elsif config['server_ip']
+        "./tmp/cache_client_#{v}"
+      else
+        "./tmp/cache_sp_#{v}"
+      end
+    end
+
+    def game_versions_root
+      File.expand_path(config['game_versions_root'] || '~/projects/zomboid/versions')
+    end
+
+    def game_version_name
+      name = config['game_version']
+      name ||= config['game_versions'].is_a?(Array) && config['game_versions'].first
+      name ||= config['game_versions'].is_a?(Hash) && config['game_versions'].keys.first
+      name&.to_s || 'default'
+    end
+
     def game_config_dir
-      game_version = config['game_versions']&.first || 'default'
-      dir = File.join(ZBSpec.root, 'game_configs', game_version.to_s)
-      raise GameLaunchError, "Game config dir not found: #{dir} (game_version=#{game_version.inspect})" unless File.directory?(dir)
+      base = File.join(ZBSpec.root, 'game_configs')
+      name = game_version_name
+      dir = File.join(base, name)
+      unless File.directory?(dir)
+        warn "⚠️  Game config dir not found: #{dir} (game_version=#{name.inspect}), using default"
+        dir = File.join(base, 'default')
+        raise GameLaunchError, "Game config dir not found: #{dir}" unless File.directory?(dir)
+      end
       dir
     end
 
@@ -233,14 +289,13 @@ module ZBSpec
       FileUtils.mkdir_p(mods_dir)
       # Copy ini and lua files from game_configs/<game_version>, preserving structure
       config_dir = game_config_dir
-      Dir[File.join(config_dir, '**/*.{ini,lua}')].each do |src|
+      Dir[File.join(config_dir, '**/*.{ini,lua,txt}')].each do |src|
         next unless File.file?(src)
         relative_path = src.sub("#{config_dir}/", '').sub(%r{\A/}, '')
         dest_path = File.join(cache_dir, relative_path)
         FileUtils.mkdir_p(File.dirname(dest_path))
         FileUtils.cp(src, dest_path)
       end
-      FileUtils.touch(File.join(mods_dir, 'reset-mods-42_00.txt'))
       
       # Update server ini with mods list and randomize port
       server_ini = File.join(cache_dir, 'Server', 'servertest.ini')
@@ -305,29 +360,63 @@ module ZBSpec
     end
 
     def find_executable
-      game_path = config['game_path']
+      version_dir = File.join(game_versions_root, game_version_name)
+      game_path = File.directory?(version_dir) ? version_dir : config['game_path']
       
       if mac?
-        # macOS: Check both standalone and Steam versions
-        candidates = [
-          File.join(game_path, 'Contents', 'MacOS', 'ProjectZomboid'),      # Standalone
-          File.join(game_path, 'Contents', 'MacOS', 'JavaAppLauncher')      # Steam
-        ]
-        
-        executable = candidates.find { |path| File.exist?(path) }
-        
-        unless executable
-          raise "Could not find game executable. Checked:\n#{candidates.map { |p| "  - #{p}" }.join("\n")}"
-        end
-        
-        executable
-      elsif windows?
-        # Windows
-        File.join(game_path, 'ProjectZomboid64.exe')
+        # macOS: use Java from resolved JAVA_HOME
+        java_home = @mac_java_home
+        raise "JAVA_HOME not resolved. resolve_mac_paths should have been called." unless java_home
+        java_bin = File.join(java_home, 'bin', 'java')
+        raise "Java executable not found: #{java_bin}" unless File.exist?(java_bin)
+        java_bin
       else
-        # Linux
-        File.join(game_path, 'projectzomboid.sh')
+        # Windows/Linux
+        raise "TBD"
       end
+    end
+
+    # macOS: resolve JAVA_HOME and GAME_ROOT paths
+    def resolve_mac_paths
+      version_dir = File.join(game_versions_root, game_version_name)
+      game_path = File.directory?(version_dir) ? version_dir : config['game_path']
+      return [nil, nil] unless game_path
+      app_dir = resolve_mac_app_dir(game_path)
+      java_home = mac_java_home(app_dir)
+      game_root = mac_game_root(app_dir)
+      [java_home, game_root]
+    end
+
+    # macOS: resolve app dir as "Project Zomboid.app" or "osx/Project Zomboid.app" under game_path
+    def resolve_mac_app_dir(game_path)
+      base = File.expand_path(game_path.to_s)
+      return base if base.end_with?('.app') && File.directory?(base)
+      candidates = [
+        File.join(base, 'Project Zomboid.app'),
+        File.join(base, 'osx', 'Project Zomboid.app')
+      ]
+      app_dir = candidates.find { |d| File.directory?(d) }
+      raise "Could not find app dir. Checked:\n#{candidates.map { |p| "  - #{p}" }.join("\n")}" unless app_dir
+      app_dir
+    end
+
+    # macOS: JAVA_HOME from app's bundled JRE (prefer arch-matched, then zulu)
+    def mac_java_home(app_dir)
+      arch = mac_arch
+      jre_candidates = [
+        File.join(app_dir, 'Contents', 'PlugIns', "jre-#{arch}", 'Contents', 'Home'),
+        File.join(app_dir, 'Contents', 'PlugIns', 'zulu-17.jre', 'Contents', 'Home')
+      ]
+      jre_candidates.find { |d| File.directory?(d) }
+    end
+
+    def mac_arch
+      RUBY_PLATFORM.include?('aarch64') ? 'aarch64' : 'x86_64'
+    end
+
+    # macOS: GAME_ROOT = app_dir/Contents/Java
+    def mac_game_root(app_dir)
+      File.join(app_dir, 'Contents', 'Java')
     end
 
     def mac?

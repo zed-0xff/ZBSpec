@@ -18,6 +18,7 @@ module ZBSpec
       'server_startup_timeout' => 60,   # Server startup timeout (faster)
       'auto_shutdown' => false,
       'game_path' => nil,  # Auto-detect by default
+      'game_versions_root' => '~/projects/zomboid/versions',
       'game_versions' => ['default'],
       'debug' => true,
       'mods' => [],

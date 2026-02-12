@@ -6,8 +6,9 @@ module ZBSpec
     attr_reader :config, :server_launcher, :client_launcher
     attr_reader :server_api, :client_api, :verbosity
 
-    def initialize(config_path: nil, spec_files: nil, verbosity: 0, client_only: false)
+    def initialize(config_path: nil, spec_files: nil, verbosity: 0, client_only: false, config_overrides: {})
       @config = Config.new(config_path)
+      config_overrides.each { |k, v| @config[k] = v }
       @verbosity = verbosity
       @spec_files = spec_files
       @client_only = client_only
@@ -65,12 +66,19 @@ module ZBSpec
       Config.new(nil).tap { |c| c.merge!(cfg) }
     end
 
+    def game_version_name
+      name = @config['game_version']
+      name ||= @config['game_versions'].is_a?(Array) && @config['game_versions'].first
+      name ||= @config['game_versions'].is_a?(Hash) && @config['game_versions'].keys.first
+      name&.to_s || 'default'
+    end
+
     def server_cache_dir
-      File.expand_path('./tmp/cache_server')
+      File.expand_path("./tmp/cache_server_#{game_version_name}")
     end
 
     def client_cache_dir
-      File.expand_path('./tmp/cache_client')
+      File.expand_path("./tmp/cache_client_#{game_version_name}")
     end
 
     def server_port_file
@@ -107,8 +115,8 @@ module ZBSpec
       
       threads = []
       threads << Thread.new do
-        @server_api.discover_port(timeout: server_timeout)
-        @server_api.wait_for_ready(timeout: server_timeout)
+        @server_api.discover_port(timeout: server_timeout, process_pid: @server_launcher.pid)
+        @server_api.wait_for_ready(timeout: server_timeout, process_pid: @server_launcher.pid)
         is_server = @server_api.execute('return isServer()')
         raise "Server instance is not running as server! isServer()=#{is_server}" unless is_server
         server_ready = true
@@ -116,9 +124,9 @@ module ZBSpec
       end
       threads << Thread.new do
         sleep 0.5 until server_ready
-        @client_api.discover_port(timeout: client_timeout)
-        @client_api.wait_for_ready(timeout: client_timeout)
-        @client_api.wait_for_player(timeout: client_timeout)
+        @client_api.discover_port(timeout: client_timeout, process_pid: @client_launcher.pid)
+        @client_api.wait_for_ready(timeout: client_timeout, process_pid: @client_launcher.pid)
+        @client_api.wait_for_player(timeout: client_timeout, process_pid: @client_launcher.pid)
         is_client = @client_api.execute('return isClient()')
         raise "Client instance is not running as client! isClient()=#{is_client}" unless is_client
         puts "  ✓ Client ready" if @verbosity > 0
@@ -195,7 +203,17 @@ module ZBSpec
 
     def handle_error(error)
       puts "\n❌ Fatal error: #{error.message}"
-      puts error.backtrace.first(10)
+      if error.message.include?('terminated before API')
+        [@server_launcher, @client_launcher].compact.each do |launcher|
+          std_log = File.join(launcher.get_cache_dir, 'std.log')
+          next unless File.exist?(std_log)
+          lines = File.readlines(std_log).last(50)
+          puts "\n--- Last 50 lines of #{std_log} ---"
+          puts lines.join
+        end
+      else
+        puts error.backtrace.first(10)
+      end
       @client_launcher.stop if @client_launcher&.running?
       @server_launcher.stop if @server_launcher&.running?
       exit 1

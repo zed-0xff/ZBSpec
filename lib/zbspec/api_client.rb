@@ -19,13 +19,17 @@ module ZBSpec
     end
 
     # Discover port from file and update base URI
-    def discover_port(timeout: 120)
+    # If process_pid is set and that process exits, aborts immediately instead of waiting for timeout.
+    def discover_port(timeout: 120, process_pid: nil)
       return if @port && @base_uri # Port already set
       
       log "🔍 Discovering API port..."
       
       Timeout.timeout(timeout) do
         loop do
+          if process_pid && !process_alive?(process_pid)
+            raise APIError, "Process (PID #{process_pid}) terminated before API port was available"
+          end
           if File.exist?(@port_file)
             port_str = File.read(@port_file).strip
             if !port_str.empty? && port_str =~ /^\d+$/
@@ -45,11 +49,15 @@ module ZBSpec
     end
 
     # Wait for API to become ready
-    def wait_for_ready(timeout: 120)
+    # If process_pid is set and that process exits, aborts immediately.
+    def wait_for_ready(timeout: 120, process_pid: nil)
       log "⏳ Waiting for API..."
 
       Timeout.timeout(timeout) do
         loop do
+          if process_pid && !process_alive?(process_pid)
+            raise APIError, "Process (PID #{process_pid}) terminated before API was ready"
+          end
           return true if ready?
 
           print '.'
@@ -64,6 +72,15 @@ module ZBSpec
     def ready?
       execute('return "ready"') == 'ready'
     rescue StandardError
+      false
+    end
+
+    # Returns false if process has exited (including zombie). Uses wait(WNOHANG) so we detect exit immediately.
+    def process_alive?(pid)
+      return false unless pid && pid > 0
+      reaped = Process.wait(pid, Process::WNOHANG)
+      reaped.nil?  # nil = still running; non-nil = exited (we reaped it)
+    rescue Errno::ESRCH, Errno::ECHILD
       false
     end
 
@@ -264,11 +281,15 @@ module ZBSpec
     end
 
     # Wait for player to be available
-    def wait_for_player(timeout: 120)
+    # If process_pid is set and that process exits, aborts immediately.
+    def wait_for_player(timeout: 120, process_pid: nil)
       log "⏳ Waiting for player to spawn..."
 
       Timeout.timeout(timeout) do
         loop do
+          if process_pid && !process_alive?(process_pid)
+            raise APIError, "Process (PID #{process_pid}) terminated before player spawned"
+          end
           player = execute('return getPlayer() ~= nil')
           if player
             log "✓ Player spawned"

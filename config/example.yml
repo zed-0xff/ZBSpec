@@ -5,8 +5,12 @@
 startup_timeout: 120
 auto_shutdown: false
 game_path: /Applications/Project Zomboid.app
+game_versions_root: "~/projects/zomboid/versions"
 game_versions:
-  - default
+  - 41
+  - 42.12
+  - 42.13
+  - unstable
 debug: true
 spec_glob: spec/**/*_spec.lua
 

@@ -37,10 +37,10 @@ module ZBSpec
       launch_game_if_needed
 
       # Discover API port (from file if using random port)
-      api_client.discover_port(timeout: startup_timeout)
+      api_client.discover_port(timeout: startup_timeout, process_pid: launcher.pid)
 
       # Wait for API to be ready
-      api_client.wait_for_ready(timeout: startup_timeout)
+      api_client.wait_for_ready(timeout: startup_timeout, process_pid: launcher.pid)
       
       # Sanity check: verify instance is running in expected mode
       if config['server_mode']
@@ -51,7 +51,7 @@ module ZBSpec
         is_client = api_client.execute('return isClient()')
         raise "Instance should be client but isClient()=#{is_client}" unless is_client
         puts "✓ Client ready" if verbosity > 0
-        api_client.wait_for_player(timeout: startup_timeout)
+        api_client.wait_for_player(timeout: startup_timeout, process_pid: launcher.pid)
       else
         # SP mode: should be neither client nor server
         is_client = api_client.execute('return isClient()')
@@ -60,7 +60,7 @@ module ZBSpec
           raise "SP instance should be neither client nor server, but isClient=#{is_client}, isServer=#{is_server}"
         end
         puts "✓ SP ready" if verbosity > 0
-        api_client.wait_for_player(timeout: startup_timeout)
+        api_client.wait_for_player(timeout: startup_timeout, process_pid: launcher.pid)
       end
 
       # Run all specs
@@ -95,7 +95,16 @@ module ZBSpec
 
     def handle_error(error)
       puts "\n❌ Fatal error: #{error.message}"
-      puts error.backtrace.first(5)
+      if launcher && error.message.include?('terminated before API')
+        std_log = File.join(launcher.get_cache_dir, 'std.log')
+        if File.exist?(std_log)
+          lines = File.readlines(std_log).last(50)
+          puts "\n--- Last 50 lines of #{std_log} ---"
+          puts lines.join
+        end
+      else
+        puts error.backtrace.first(5)
+      end
       launcher.stop if launcher&.running?
       exit 1
     end
