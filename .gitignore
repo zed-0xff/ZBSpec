@@ -4,6 +4,7 @@
 *.tmp
 *.swp
 
+reports
 tmp
 
 # Ruby gem

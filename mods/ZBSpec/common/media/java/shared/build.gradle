@@ -9,6 +9,16 @@ dependencies {
     compileOnly files("${GAME_JAVA_DIR}/projectzomboid.jar")
 }
 
+jar {
+    archiveBaseName.set("ZBSpec")
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17) // has to be 17 for B41 support!
+    }
+}
+
 repositories {
     mavenCentral()
     gradlePluginPortal()

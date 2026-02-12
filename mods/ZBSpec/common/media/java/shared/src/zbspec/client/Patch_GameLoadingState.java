@@ -1,6 +1,9 @@
 package me.zed_0xff.zbspec;
 
+import me.zed_0xff.zombie_buddy.Accessor;
 import me.zed_0xff.zombie_buddy.Patch;
+
+import java.lang.reflect.Field;
 
 /**
  * Patch for zombie.gameStates.GameLoadingState to force the loading screen to complete quickly.
@@ -14,27 +17,18 @@ public class Patch_GameLoadingState {
      */
     @Patch(className = "zombie.gameStates.GameLoadingState", methodName = "update")
     public static class PatchUpdate {
+        public static final Field f_forceDone = Accessor.findField("zombie.gameStates.GameLoadingState", "forceDone", "bForceDone"); // changed in 42.13.1 or .2
         public static boolean msgShown = false;
         
         @Patch.OnEnter
         public static void enter(@Patch.This Object self) {
-            try {
-                // Access the private forceDone field using reflection
-                java.lang.reflect.Field forceDoneField = self.getClass().getDeclaredField("forceDone");
-                forceDoneField.setAccessible(true);
-                
-                forceDoneField.setBoolean(self, true);
-                
-                if (!msgShown) {
+            if (!msgShown) {
+                msgShown = true;
+                if (Accessor.trySet(self, f_forceDone, true)) {
                     System.out.println("[ZBSpec] GameLoadingState.update() - forceDone set to true");
-                    msgShown = true;
+                } else {
+                    System.err.println("[ZBSpec] ERROR: Failed to set forceDone field in GameLoadingState");
                 }
-            } catch (NoSuchFieldException e) {
-                System.err.println("[ZBSpec] ERROR: Could not find forceDone field in GameLoadingState");
-                e.printStackTrace();
-            } catch (IllegalAccessException e) {
-                System.err.println("[ZBSpec] ERROR: Could not access forceDone field in GameLoadingState");
-                e.printStackTrace();
             }
         }
     }
