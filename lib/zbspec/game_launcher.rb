@@ -332,7 +332,7 @@ module ZBSpec
       FileUtils.ln_s(File.join(ZBSpec.root, 'mods', 'ZBSpec'), zbspec_link, target_directory: false, force: true)
 
       zombiebuddy_link = File.join(mods_dir, 'ZombieBuddy')
-      FileUtils.ln_sf(zombiebuddy_mod_dir, zombiebuddy_link)
+      FileUtils.ln_s(zombiebuddy_mod_dir, zombiebuddy_link, target_directory: false, force: true)
 
       # Symlink mods: path (explicit), Steam workshop (steam_id), or ~/Zomboid/Mods/
       user_mods_dir = File.expand_path('~/Zomboid/Mods')
@@ -343,16 +343,16 @@ module ZBSpec
         if entry['path']
           src = File.expand_path(entry['path'])
           raise GameLaunchError, "Mod path not found: #{entry['path']} (resolved: #{src})" unless File.exist?(src)
-          FileUtils.ln_sf(src, mod_link)
+          FileUtils.ln_s(src, mod_link, target_directory: false, force: true)
         elsif (steam_id = entry['steam_id'])
           src = steam_workshop_mod_path(steam_id, mod)
           unless File.exist?(src)
             raise GameLaunchError, "Steam workshop mod not installed: #{mod} (steam_id=#{steam_id}). Expected: #{src}"
           end
-          FileUtils.ln_sf(src, mod_link)
+          FileUtils.ln_s(src, mod_link, target_directory: false, force: true)
         else
           user_mod_path = File.join(user_mods_dir, mod)
-          FileUtils.ln_sf(user_mod_path, mod_link) if File.exist?(user_mod_path) && !File.exist?(mod_link)
+          FileUtils.ln_s(user_mod_path, mod_link, target_directory: false, force: true) if File.exist?(user_mod_path)
         end
       end
 
