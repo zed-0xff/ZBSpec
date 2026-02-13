@@ -39,6 +39,9 @@ module ZBSpec
         zbspec -V 42.13           # Use game config from game_configs/42.13
         zbspec -i                 # Interactive console (all instances)
         zbspec -i --port 4444     # Interactive console (connect to port only, no config)
+        zbspec -i --script foo.lua  # Run script then interactive console
+        zbspec --port 4444 --script foo.lua  # Send script to port only, then exit
+        zbspec --script foo.lua   # Send script to all active instances
         zbspec --client -i        # Interactive console (client only)
         zbspec --server -i        # Interactive console (server only)
         zbspec spec/my_spec.lua   # Run specific spec file
@@ -52,6 +55,7 @@ module ZBSpec
       mode: :auto,
       interactive: false,
       port: nil,
+      script: nil,
       restart: false,
       restart_only: false,
       game_version: nil,
@@ -75,6 +79,8 @@ module ZBSpec
       return print_help(opts[:parser])    if opts[:help]
       return run_stop                     if opts[:mode] == :stop
       return run_interactive_port(opts)   if opts[:interactive] && opts[:port]
+      return run_script_to_port(opts)     if opts[:port] && opts[:script]
+      return run_script_all_instances(opts) if opts[:script] && !opts[:interactive]
 
       abort config_not_found_message(opts[:config]) unless File.exist?(opts[:config])
 
@@ -114,6 +120,7 @@ module ZBSpec
         opts.on('--restart-only', 'Restart only, no tests') { options[:restart_only] = true }
         opts.on('-i', '--interactive', 'Interactive Lua console') { options[:interactive] = true }
         opts.on('--port PORT', Integer, 'Connect to API port (with -i: skip config and instance discovery)') { |p| options[:port] = p }
+        opts.on('--script FILENAME', 'Execute Lua script: with -i run then REPL; with --port send to port only; else send to all instances') { |f| options[:script] = f }
         opts.on('-h', '--help', 'Show this help') { options[:help] = true }
         opts.on('--version', 'Show version') { options[:version] = true }
         opts.on('--init', 'Create default config and stub spec') { options[:init] = true }
@@ -308,7 +315,7 @@ module ZBSpec
       abort "❌ Invalid port: #{opts[:port]}" if port <= 0 || port > 65_535
 
       puts "🔧 Interactive Lua Console (port #{port})\n" + "=" * 50
-      client = APIClient.new(port: port)
+      client = APIClient.new(port: port, verbosity: opts[:verbosity])
       unless client.ready?
         abort "❌ Cannot connect to port #{port}. Is the game running with ZombieBuddy?"
       end
@@ -318,12 +325,29 @@ module ZBSpec
       cancel_pending_jobs(clients)
       load_spec_helper(clients)
 
+      if opts[:script]
+        execute_script_on_clients(clients, opts[:script], opts, exit_on_error: true)
+      end
+
       puts "\nType Lua code to execute. Type 'exit' or press Ctrl+D/Ctrl+C to quit.\n\n"
       require 'readline'
       setup_readline_history
       trap('INT') { puts "\nBye!"; exit 0 }
       interactive_repl_loop(clients, opts)
       puts "Bye!"
+    end
+
+    def run_script_to_port(opts)
+      port = opts[:port].to_i
+      abort "❌ Invalid port: #{opts[:port]}" if port <= 0 || port > 65_535
+      abort "❌ Script file not found: #{opts[:script]}" unless File.file?(opts[:script])
+
+      client = APIClient.new(port: port, verbosity: opts[:verbosity])
+      unless client.ready?
+        abort "❌ Cannot connect to port #{port}. Is the game running with ZombieBuddy?"
+      end
+      clients = { ":#{port}" => client }
+      execute_script_on_clients(clients, opts[:script], opts, exit_on_error: true)
     end
 
     def run_interactive(opts)
@@ -342,12 +366,48 @@ module ZBSpec
       cancel_pending_jobs(clients)
       load_spec_helper(clients)
 
+      execute_script_on_clients(clients, opts[:script], opts, exit_on_error: false) if opts[:script]
+
       puts "\nType Lua code to execute on all instances.\nType 'exit' or press Ctrl+D/Ctrl+C to quit.\n\n"
       require 'readline'
       setup_readline_history
       trap('INT') { puts "\nBye!"; exit 0 }
       interactive_repl_loop(clients, opts)
       puts "Bye!"
+    end
+
+    def run_script_all_instances(opts)
+      path = opts[:script]
+      abort "❌ Script file not found: #{path}" unless File.file?(path)
+
+      clients = discover_interactive_clients(:auto)
+      if clients.empty?
+        abort "❌ No running instances found. Start a game first (e.g. zbspec --sp)."
+      end
+
+      max_len = clients.keys.map(&:length).max
+      clients.each { |name, data| puts "  ✓ #{name.ljust(max_len)} (port #{data[:port]})" }
+      clients.transform_values! { |data| data[:client] }
+
+      execute_script_on_clients(clients, path, opts, exit_on_error: true)
+    end
+
+    def execute_script_on_clients(clients, path, opts, exit_on_error: false)
+      code = File.read(path)
+      multi = clients.size > 1
+      max_len = clients.keys.map(&:length).max || 0
+      clients.each do |name, client|
+        result = client.execute(code)
+        puts multi ? "[#{name.ljust(max_len)}] #{result.inspect}" : result.inspect
+      rescue APIClient::LuaError => e
+        prefix = multi ? "[#{name.ljust(max_len)}] " : ""
+        puts "#{prefix}Error: #{e.error_message}"
+        puts "#{prefix}  File: #{e.file}:#{e.line}" if e.file
+        exit 1 if exit_on_error
+      rescue StandardError => e
+        puts (multi ? "[#{name.ljust(max_len)}] " : "") + "Error: #{e.class}: #{e.message}"
+        exit 1 if exit_on_error
+      end
     end
 
     def discover_interactive_clients(mode)
@@ -357,7 +417,7 @@ module ZBSpec
         port = File.read(port_file).strip.to_i
         next if port <= 0
         name = File.basename(cache_dir).sub('cache_', '')
-        client = APIClient.new(port: port)
+        client = APIClient.new(port: port, verbosity: opts[:verbosity])
         out[name] = { client: client, port: port } if client.ready?
       end
     end

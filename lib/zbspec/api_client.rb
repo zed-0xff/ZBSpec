@@ -111,6 +111,9 @@ module ZBSpec
 
         # Handle error responses (500)
         if response.code == '500'
+          if @verbosity > 1
+            puts "[d] #{response.body}"
+          end
           raise LuaError.new(response.body)
         end
 
