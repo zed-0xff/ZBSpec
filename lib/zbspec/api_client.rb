@@ -216,14 +216,24 @@ module ZBSpec
       end
 
       def extract_message_from_lua_return(lr)
-        # kahluaErrors is now an array - first element has the exception message
+        # kahluaErrors is an array of strings (may be multi-line; first line can be a separator)
         if lr['kahluaErrors'].is_a?(Array) && !lr['kahluaErrors'].empty?
-          msg = lr['kahluaErrors'].first
-          # Extract message after "Exception: "
+          msg = lr['kahluaErrors'].first.to_s
+          # Skip separator/header lines (dashes, "STACK TRACE", "dumping Lua stack trace")
+          meaningful = msg.split("\n").map(&:strip).reject do |line|
+            line.empty? ||
+              line =~ /\A-+\z/ ||
+              line == 'STACK TRACE' ||
+              line == 'dumping Lua stack trace' ||
+              line == '-----------------------------------------'
+          end
+          first_line = meaningful.first
+          return first_line if first_line && !first_line.empty?
+          # Fallback: extract after "Exception: " if present
           if msg =~ /Exception:\s*(.+?)(\n|$)/
             return $1.strip
           end
-          return msg.split("\n").first
+          return msg.split("\n").first.strip if msg.strip.length > 0
         end
         lr['errorString'] || lr['errorObject'] || 'Unknown Lua error'
       end
