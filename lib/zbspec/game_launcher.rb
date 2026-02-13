@@ -73,23 +73,22 @@ module ZBSpec
 
       log '🎮 Launching Project Zomboid...'
 
-      # Prepare launch arguments
-      args = build_launch_args
-
       redirect_output = config['redirect_output']
       redirect_output = true if redirect_output.nil?
+      log_file = redirect_output ? setup_log_file : nil
 
-      # Launch game in background (optionally redirect stdout/stderr to log)
-      spawn_opts = {}
-      if redirect_output
-        log_file = setup_log_file
-        spawn_opts[:out] = log_file
-        spawn_opts[:err] = log_file
-      end
-      spawn_opts[:chdir] = @mac_game_root
+      args = build_launch_args(log_file: log_file)
+
       log "game root: #{@mac_game_root}"
-      log "Launching with args: #{args.inspect}"
-      @pid = spawn(*args, **spawn_opts)
+      if args.is_a?(Hash) && args.key?(:app)
+        log "Launching #{args[:app].name} via app bundle"
+        @pid = args[:app].start!
+      else
+        spawn_opts = { chdir: @mac_game_root }
+        spawn_opts[:out] = spawn_opts[:err] = log_file if log_file
+        log "Launching with args: #{args.inspect}"
+        @pid = spawn(*args, **spawn_opts)
+      end
       @running = true
 
       # Write PID file
@@ -97,8 +96,7 @@ module ZBSpec
 
       if @verbosity > 0
         log "PID: #{@pid}"
-        log "Log: #{log_file}" if redirect_output
-        log "stdout/stderr: inherited from parent process" unless redirect_output
+        log "Log: #{log_file}" if log_file
         log "Mods: #{config['mods'].join(', ')}" if config['mods']
       end
     rescue StandardError => e
@@ -165,26 +163,43 @@ module ZBSpec
       File.join(cache_dir, 'std.log')
     end
 
-    def build_launch_args
+    def build_launch_args(log_file: nil)
       @mac_java_home, @mac_game_root = resolve_mac_paths if mac?
       game_exe = find_executable
 
       if mac?
-        build_mac_launch_args(game_exe)
+        build_mac_launch_args(game_exe, log_file: log_file)
       else
         build_other_launch_args(game_exe)
       end
     end
 
-    def build_mac_launch_args(java_bin)
+    def build_mac_launch_args(java_bin, log_file: nil)
       cache_dir = File.expand_path(config['cache_dir'] || default_cache_dir)
       init_cachedir(cache_dir)
 
-      # Classpath: all *.jar in GAME_ROOT plus .
+      argv = build_java_argv(java_bin, cache_dir)
+      app_display_name = config['window_title'].to_s.strip.empty? ? default_window_title : config['window_title']
+      pid_file = File.join(cache_dir, 'pz.pid')
+
+      app = AppFactory.create(
+        apps_root: cache_dir,
+        name: app_display_name,
+        chdir: @mac_game_root,
+        argv: argv,
+        pid_file: pid_file,
+        log_file: log_file
+      )
+
+      { app: app }
+    end
+
+    # argv for run.sh: first = java binary, rest = JVM + game args
+    def build_java_argv(java_bin, cache_dir)
       jars = Dir[File.join(@mac_game_root, '*.jar')].map { |f| File.basename(f) }
       classpath = (jars + ['.']).join(':')
 
-      args = [
+      argv = [
         java_bin,
         '--enable-native-access=ALL-UNNAMED',
         '-Djava.awt.headless=true',
@@ -199,26 +214,26 @@ module ZBSpec
         '-classpath', classpath
       ]
 
-      args << (config['server_mode'] ? 'zombie.network.GameServer' : 'zombie.gameStates.MainScreenState')
-      args << '--'
-      args << "-cachedir=#{cache_dir}"
+      argv << (config['server_mode'] ? 'zombie.network.GameServer' : 'zombie.gameStates.MainScreenState')
+      argv << '--'
+      argv << "-cachedir=#{cache_dir}"
 
       if config['server_mode']
         server_name = config['server_name'] || 'ZBSpecServer'
-        args << server_name << '-nosteam' << '-adminpassword' << (config['admin_password'] || 'zbspec')
+        argv << server_name << '-nosteam' << '-adminpassword' << (config['admin_password'] || 'zbspec')
       else
-        args.concat(['-novoip', '-nosound', '-nosteam', '-no-worldgen', '-no-foraging', '-no-attachments'])
+        argv.concat(['-novoip', '-nosound', '-nosteam', '-no-worldgen', '-no-foraging', '-no-attachments'])
         if config['server_ip']
           ip = config['server_ip']
           port = config['server_port'] || read_server_game_port || 16261
           password = config['password'] || ''
-          args << '+connect' << "#{ip}:#{port}"
-          args << '+password' << password unless password.empty?
+          argv << '+connect' << "#{ip}:#{port}"
+          argv << '+password' << password unless password.empty?
         else
-          args << '-debug' if config['debug']
+          argv << '-debug' if config['debug']
         end
       end
-      args
+      argv
     end
 
     def build_other_launch_args(game_exe)
@@ -308,7 +323,7 @@ module ZBSpec
     end
 
     def game_config_dir
-      base = File.join(ZBSpec.root, 'game_configs')
+      base = File.join(ZBSpec.root, 'configs')
       name = game_version_name
       dir = File.join(base, name)
       unless File.directory?(dir)
@@ -322,7 +337,7 @@ module ZBSpec
     def init_cachedir(cache_dir)
       mods_dir = File.join(cache_dir, 'mods')
       FileUtils.mkdir_p(mods_dir)
-      # Copy ini and lua files from game_configs/<game_version>, preserving structure
+      # Copy ini and lua files from configs/<game_version>, preserving structure
       config_dir = game_config_dir
       mods = build_mod_list
       Dir[File.join(config_dir, '**/*.{ini,lua,txt,erb}')].each do |src|

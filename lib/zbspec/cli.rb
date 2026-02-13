@@ -42,7 +42,7 @@ module ZBSpec
         zbspec --restart          # Restart instances before running specs
         zbspec --restart-only     # Restart instances only (no tests)
         zbspec --init             # Create default config and stub spec
-        zbspec -V 42.13           # Use game config from game_configs/42.13
+        zbspec -V 42.13           # Use game config from configs/42.13
         zbspec -i                 # Interactive console (all instances)
         zbspec -i --port 4444     # Interactive console (connect to port only, no config)
         zbspec -i --script foo.lua  # Run script then interactive console
@@ -115,7 +115,7 @@ module ZBSpec
         opts.on('-c', '--config PATH', 'Path to config file (default: spec/zbspec.yml)') { |p| options[:config] = p }
         opts.on('-m', '--mod-dir PATH', 'Path to mod directory') { |p| options[:mod_dir] = p }
         opts.on('-v', '--verbose', 'Increase verbosity (can be repeated: -vvv)') { options[:verbosity] += 1 }
-        opts.on('-V', '--game-version VERSION', 'Use game config from game_configs/VERSION') { |v| options[:game_version] = v }
+        opts.on('-V', '--game-version VERSION', 'Use game config from configs/VERSION') { |v| options[:game_version] = v }
         opts.on('--sp', 'Singleplayer only') { options[:mode] = :sp }
         opts.on('--server', 'Server only') { options[:mode] = :server }
         opts.on('--client', 'Client only (auto-start server)') { options[:mode] = :client }
