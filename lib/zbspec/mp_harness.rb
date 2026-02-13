@@ -66,19 +66,12 @@ module ZBSpec
       Config.new(nil).tap { |c| c.merge!(cfg) }
     end
 
-    def game_version_name
-      name = @config['game_version']
-      name ||= @config['game_versions'].is_a?(Array) && @config['game_versions'].first
-      name ||= @config['game_versions'].is_a?(Hash) && @config['game_versions'].keys.first
-      name&.to_s || 'default'
-    end
-
     def server_cache_dir
-      File.expand_path("./tmp/cache_server_#{game_version_name}")
+      File.expand_path("./tmp/cache_server_#{ZBSpec.game_version_name(@config)}")
     end
 
     def client_cache_dir
-      File.expand_path("./tmp/cache_client_#{game_version_name}")
+      File.expand_path("./tmp/cache_client_#{ZBSpec.game_version_name(@config)}")
     end
 
     def server_port_file

@@ -17,6 +17,7 @@ module ZBSpec
       'startup_timeout' => 120,         # Client/SP startup timeout
       'server_startup_timeout' => 60,   # Server startup timeout (faster)
       'auto_shutdown' => false,
+      'redirect_output' => true,        # Redirect game stdout/stderr to cache std.log
       'game_path' => nil,  # Auto-detect by default
       'game_versions_root' => '~/projects/zomboid/versions',
       'game_versions' => ['default'],

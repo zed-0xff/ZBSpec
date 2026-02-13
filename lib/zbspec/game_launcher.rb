@@ -76,11 +76,16 @@ module ZBSpec
       # Prepare launch arguments
       args = build_launch_args
 
-      # Setup log file for game output
-      log_file = setup_log_file
+      redirect_output = config['redirect_output']
+      redirect_output = true if redirect_output.nil?
 
-      # Launch game in background, redirect stdout and stderr to log
-      spawn_opts = { out: log_file, err: log_file }
+      # Launch game in background (optionally redirect stdout/stderr to log)
+      spawn_opts = {}
+      if redirect_output
+        log_file = setup_log_file
+        spawn_opts[:out] = log_file
+        spawn_opts[:err] = log_file
+      end
       spawn_opts[:chdir] = @mac_game_root
       log "game root: #{@mac_game_root}"
       log "Launching with args: #{args.inspect}"
@@ -92,7 +97,8 @@ module ZBSpec
 
       if @verbosity > 0
         log "PID: #{@pid}"
-        log "Log: #{log_file}"
+        log "Log: #{log_file}" if redirect_output
+        log "stdout/stderr: inherited from parent process" unless redirect_output
         log "Mods: #{config['mods'].join(', ')}" if config['mods']
       end
     rescue StandardError => e
@@ -189,7 +195,7 @@ module ZBSpec
         '-XX:+UseZGC',
         '-XX:-OmitStackTraceInFastThrow',
         "-Djava.library.path=.:#{File.join(@mac_java_home, 'lib')}",
-        "-javaagent:#{zombiebuddy_jar}=experimental,lua_server_port=random",
+        javaagent_arg,
         '-classpath', classpath
       ]
 
@@ -216,7 +222,7 @@ module ZBSpec
     end
 
     def build_other_launch_args(game_exe)
-      args = [game_exe, "-javaagent:#{zombiebuddy_jar}=experimental,lua_server_port=random"]
+      args = [game_exe, javaagent_arg]
       args << 'zombie.network.GameServer' if config['server_mode']
       args << '--'
       cache_dir = File.expand_path(config['cache_dir'] || default_cache_dir)
@@ -235,6 +241,29 @@ module ZBSpec
         end
       end
       args
+    end
+
+    def javaagent_arg
+      agent_parts = ['experimental', 'lua_server_port=random']
+      title = config['window_title']
+      title = default_window_title if title.nil? || title.empty?
+      if title && !title.empty?
+        encoded_title = URI.encode_www_form_component(title)
+        agent_parts << "window_title=#{encoded_title}"
+      end
+      "-javaagent:#{zombiebuddy_jar}=#{agent_parts.join(',')}"
+    end
+
+    def default_window_title
+      version = game_version_name
+      case @label
+      when 'server'
+        "MP #{version} server"
+      when 'client'
+        "MP #{version} client"
+      else
+        "SP #{version}"
+      end
     end
 
     def zombiebuddy_jar

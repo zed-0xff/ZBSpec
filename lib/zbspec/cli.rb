@@ -56,6 +56,7 @@ module ZBSpec
       interactive: false,
       port: nil,
       script: nil,
+      redirect_output: nil,
       restart: false,
       restart_only: false,
       game_version: nil,
@@ -120,6 +121,7 @@ module ZBSpec
         opts.on('-i', '--interactive', 'Interactive Lua console') { options[:interactive] = true }
         opts.on('--port PORT', Integer, 'Connect to API port (with -i: skip config and instance discovery)') { |p| options[:port] = p }
         opts.on('--script FILENAME', 'Execute Lua script: with -i run then REPL; with --port send to port only; else send to all instances') { |f| options[:script] = f }
+        opts.on('--no-redirect-stdio', 'Do not redirect game stdout/stderr to std.log') { options[:redirect_output] = false }
         opts.on('-h', '--help', 'Show this help') { options[:help] = true }
         opts.on('--version', 'Show version') { options[:version] = true }
         opts.on('--init', 'Create default config and stub spec') { options[:init] = true }
@@ -141,7 +143,10 @@ module ZBSpec
     end
 
     def build_config_overrides
-      @opts[:game_version] ? { 'game_version' => @opts[:game_version] } : {}
+      overrides = {}
+      overrides['game_version'] = @opts[:game_version] if @opts[:game_version]
+      overrides['redirect_output'] = @opts[:redirect_output] unless @opts[:redirect_output].nil?
+      overrides
     end
 
     def print_spec_summary(discovery)
@@ -416,15 +421,6 @@ module ZBSpec
         name = File.basename(cache_dir).sub('cache_', '')
         client = APIClient.new(port: port, verbosity: @opts[:verbosity])
         out[name] = { client: client, port: port } if client.ready?
-      end
-    end
-
-    def cancel_pending_jobs(clients)
-      clients.each do |name, client|
-        n = client.execute('return ZBSpec.cancelAllJobs()')
-        puts "  ⚠️  Cancelled #{n} pending jobs on #{name}" if n && n > 0
-      rescue
-        # ZBSpec might not be loaded
       end
     end
 
