@@ -72,34 +72,33 @@ module ZBSpec
     }.freeze
 
     def run(argv = ARGV)
-      opts = parse_options(argv)
+      @opts = parse_options(argv)
 
-      return run_init                    if opts[:init]
-      return puts("ZBSpec v#{ZBSpec::VERSION}") if opts[:version]
-      return print_help(opts[:parser])    if opts[:help]
-      return run_stop                     if opts[:mode] == :stop
-      return run_interactive_port(opts)   if opts[:interactive] && opts[:port]
-      return run_script_to_port(opts)     if opts[:port] && opts[:script]
-      return run_script_all_instances(opts) if opts[:script] && !opts[:interactive]
+      return run_init                    if @opts[:init]
+      return puts("ZBSpec v#{ZBSpec::VERSION}") if @opts[:version]
+      return print_help                   if @opts[:help]
+      return run_stop                     if @opts[:mode] == :stop
+      return run_interactive_port         if @opts[:interactive] && @opts[:port]
+      return run_script_to_port           if @opts[:port] && @opts[:script]
+      return run_script_all_instances     if @opts[:script] && !@opts[:interactive]
 
-      abort config_not_found_message(opts[:config]) unless File.exist?(opts[:config])
+      abort config_not_found_message(@opts[:config]) unless File.exist?(@opts[:config])
 
-      config_overrides = build_config_overrides(opts)
-      test_runner = load_test_runner(opts[:mod_dir])
+      config_overrides = build_config_overrides
+      test_runner = load_test_runner
 
-      return run_interactive(opts) if opts[:interactive]
+      return run_interactive if @opts[:interactive]
 
       discovery = SpecDiscovery.new
-      opts[:mode] = discovery.recommended_mode if opts[:mode] == :auto
+      @opts[:mode] = discovery.recommended_mode if @opts[:mode] == :auto
 
-      print_spec_summary(opts, discovery)
-      print_auto_mode(opts) if opts[:mode] != :stop
+      print_spec_summary(discovery)
+      print_auto_mode if @opts[:mode] != :stop
 
-      maybe_restart(opts)
-      return run_start_only(opts, config_overrides) if opts[:start_only]
+      maybe_restart
+      return run_start_only(config_overrides) if @opts[:start_only]
 
-      FileUtils.mkdir_p('logs')
-      run_harness_dispatch(opts, discovery, test_runner, config_overrides)
+      run_harness_dispatch(discovery, test_runner, config_overrides)
     end
 
     def parse_options(argv)
@@ -131,8 +130,8 @@ module ZBSpec
       options
     end
 
-    def print_help(parser)
-      puts parser
+    def print_help
+      puts @opts[:parser]
       puts HELP_FOOTER
     end
 
@@ -141,29 +140,29 @@ module ZBSpec
         "   Run 'zbspec --init' to create default config and stub spec, or use --config PATH"
     end
 
-    def build_config_overrides(opts)
-      opts[:game_version] ? { 'game_version' => opts[:game_version] } : {}
+    def build_config_overrides
+      @opts[:game_version] ? { 'game_version' => @opts[:game_version] } : {}
     end
 
-    def print_spec_summary(opts, discovery)
-      if opts[:spec_files].any?
-        puts "📋 Running specified spec files: #{opts[:spec_files].join(', ')}"
+    def print_spec_summary(discovery)
+      if @opts[:spec_files].any?
+        puts "📋 Running specified spec files: #{@opts[:spec_files].join(', ')}"
       else
         puts "📋 Discovered specs: #{discovery.summary}"
       end
     end
 
-    def print_auto_mode(opts)
-      reason = MODE_REASONS[opts[:mode]] || "no server specs found"
-      puts "🔍 Auto-detected mode: #{opts[:mode]} (#{reason})"
+    def print_auto_mode
+      reason = MODE_REASONS[@opts[:mode]] || "no server specs found"
+      puts "🔍 Auto-detected mode: #{@opts[:mode]} (#{reason})"
     end
 
-    def maybe_restart(opts)
-      return unless opts[:restart] || opts[:restart_only]
-      puts "🔄 Restarting instances#{opts[:restart_only] ? ' (no tests)...' : '...'}"
+    def maybe_restart
+      return unless @opts[:restart] || @opts[:restart_only]
+      puts "🔄 Restarting instances#{@opts[:restart_only] ? ' (no tests)...' : '...'}"
       stop_instances(discover_cache_dirs(:auto))
       puts "✓ Done"
-      opts[:start_only] = true if opts[:restart_only]
+      @opts[:start_only] = true if @opts[:restart_only]
     end
 
     def run_stop
@@ -293,11 +292,11 @@ module ZBSpec
 
     # --- Test runner ---
 
-    def load_test_runner(mod_dir)
-      return nil unless mod_dir
+    def load_test_runner
+      return nil unless @opts[:mod_dir]
       path = [
-        File.join(mod_dir, 'spec', 'framework', 'spec_runner.rb'),
-        File.join(mod_dir, 'spec', 'spec_runner.rb')
+        File.join(@opts[:mod_dir], 'spec', 'framework', 'spec_runner.rb'),
+        File.join(@opts[:mod_dir], 'spec', 'spec_runner.rb')
       ].find { |p| File.exist?(p) }
       return nil unless path
       puts "📦 Loading mod specs from: #{path}"
@@ -310,51 +309,50 @@ module ZBSpec
     # --- Interactive ---
 
     # Connect to a single port only; no config, no instance discovery
-    def run_interactive_port(opts)
-      port = opts[:port].to_i
-      abort "❌ Invalid port: #{opts[:port]}" if port <= 0 || port > 65_535
+    def run_interactive_port
+      port = @opts[:port].to_i
+      abort "❌ Invalid port: #{@opts[:port]}" if port <= 0 || port > 65_535
 
       puts "🔧 Interactive Lua Console (port #{port})\n" + "=" * 50
-      client = APIClient.new(port: port, verbosity: opts[:verbosity])
+      client = APIClient.new(port: port, verbosity: @opts[:verbosity])
       unless client.ready?
         abort "❌ Cannot connect to port #{port}. Is the game running with ZombieBuddy?"
       end
       puts "  ✓ Connected to port #{port}"
 
       clients = { ":#{port}" => client }
-      cancel_pending_jobs(clients)
       load_spec_helper(clients)
 
-      if opts[:script]
-        execute_script_on_clients(clients, opts[:script], opts, exit_on_error: true)
+      if @opts[:script]
+        execute_script_on_clients(clients, @opts[:script], exit_on_error: true)
       end
 
       puts "\nType Lua code to execute. Type 'exit' or press Ctrl+D/Ctrl+C to quit.\n\n"
       require 'readline'
       setup_readline_history
       trap('INT') { puts "\nBye!"; exit 0 }
-      interactive_repl_loop(clients, opts)
+      interactive_repl_loop(clients)
       puts "Bye!"
     end
 
-    def run_script_to_port(opts)
-      port = opts[:port].to_i
-      abort "❌ Invalid port: #{opts[:port]}" if port <= 0 || port > 65_535
-      abort "❌ Script file not found: #{opts[:script]}" unless File.file?(opts[:script])
+    def run_script_to_port
+      port = @opts[:port].to_i
+      abort "❌ Invalid port: #{@opts[:port]}" if port <= 0 || port > 65_535
+      abort "❌ Script file not found: #{@opts[:script]}" unless File.file?(@opts[:script])
 
-      client = APIClient.new(port: port, verbosity: opts[:verbosity])
+      client = APIClient.new(port: port, verbosity: @opts[:verbosity])
       unless client.ready?
         abort "❌ Cannot connect to port #{port}. Is the game running with ZombieBuddy?"
       end
       clients = { ":#{port}" => client }
-      execute_script_on_clients(clients, opts[:script], opts, exit_on_error: true)
+      execute_script_on_clients(clients, @opts[:script], exit_on_error: true)
     end
 
-    def run_interactive(opts)
-      stop_instances(discover_cache_dirs(:auto)) if opts[:restart]
+    def run_interactive
+      stop_instances(discover_cache_dirs(:auto)) if @opts[:restart]
       puts "🔧 Interactive Lua Console\n" + "=" * 50
 
-      clients = discover_interactive_clients(opts[:mode])
+      clients = discover_interactive_clients(@opts[:mode])
       if clients.empty?
         puts "\n❌ No running instances found. Start a game first with:\n   zbspec --sp    # Singleplayer\n   zbspec --mp    # Multiplayer"
         exit 1
@@ -363,21 +361,20 @@ module ZBSpec
       max_len = clients.keys.map(&:length).max
       clients.each { |name, data| puts "  ✓ Connected to #{name.ljust(max_len)} (port #{data[:port]})" }
       clients.transform_values! { |data| data[:client] }
-      cancel_pending_jobs(clients)
       load_spec_helper(clients)
 
-      execute_script_on_clients(clients, opts[:script], opts, exit_on_error: false) if opts[:script]
+      execute_script_on_clients(clients, @opts[:script], exit_on_error: false) if @opts[:script]
 
       puts "\nType Lua code to execute on all instances.\nType 'exit' or press Ctrl+D/Ctrl+C to quit.\n\n"
       require 'readline'
       setup_readline_history
       trap('INT') { puts "\nBye!"; exit 0 }
-      interactive_repl_loop(clients, opts)
+      interactive_repl_loop(clients)
       puts "Bye!"
     end
 
-    def run_script_all_instances(opts)
-      path = opts[:script]
+    def run_script_all_instances
+      path = @opts[:script]
       abort "❌ Script file not found: #{path}" unless File.file?(path)
 
       clients = discover_interactive_clients(:auto)
@@ -389,10 +386,10 @@ module ZBSpec
       clients.each { |name, data| puts "  ✓ #{name.ljust(max_len)} (port #{data[:port]})" }
       clients.transform_values! { |data| data[:client] }
 
-      execute_script_on_clients(clients, path, opts, exit_on_error: true)
+      execute_script_on_clients(clients, path, exit_on_error: true)
     end
 
-    def execute_script_on_clients(clients, path, opts, exit_on_error: false)
+    def execute_script_on_clients(clients, path, exit_on_error: false)
       code = File.read(path)
       multi = clients.size > 1
       max_len = clients.keys.map(&:length).max || 0
@@ -417,7 +414,7 @@ module ZBSpec
         port = File.read(port_file).strip.to_i
         next if port <= 0
         name = File.basename(cache_dir).sub('cache_', '')
-        client = APIClient.new(port: port, verbosity: opts[:verbosity])
+        client = APIClient.new(port: port, verbosity: @opts[:verbosity])
         out[name] = { client: client, port: port } if client.ready?
       end
     end
@@ -451,7 +448,7 @@ module ZBSpec
       end
     end
 
-    def interactive_repl_loop(clients, opts)
+    def interactive_repl_loop(clients)
       max_len = clients.keys.map(&:length).max || 0
       while (line = Readline.readline('lua> ', true))
         line = line.strip
@@ -459,11 +456,11 @@ module ZBSpec
         next if line.empty?
         Readline::HISTORY.pop if Readline::HISTORY.size > 1 && Readline::HISTORY[-2] == line
         lua = line.match?(/\breturn\b|;/) ? line : "return #{line}"
-        clients.each { |name, client| run_lua_line(client, lua, name, max_len, clients.size > 1, opts) }
+        clients.each { |name, client| run_lua_line(client, lua, name, max_len, clients.size > 1) }
       end
     end
 
-    def run_lua_line(client, lua, name, max_len, multi, opts)
+    def run_lua_line(client, lua, name, max_len, multi)
       result = client.execute(lua)
       ires = result.ai # amazing_print
       if multi
@@ -476,7 +473,7 @@ module ZBSpec
       puts "#{prefix}Error: #{e.error_message}"
       puts "#{prefix}  File: #{e.file}:#{e.line}" if e.file
       puts "#{prefix}  Test: #{e.test_name}" if e.test_name
-      if opts[:verbosity] >= 1 && e.lua_return
+      if @opts[:verbosity] >= 1 && e.lua_return
         puts "#{prefix}  Raw:"
         e.lua_return['kahluaErrors']&.each { |err| err.each_line { |l| puts "#{prefix}    #{l.rstrip}" } }
       end
@@ -486,44 +483,44 @@ module ZBSpec
 
     # --- Start only ---
 
-    def run_start_only(opts, config_overrides)
+    def run_start_only(config_overrides)
       puts "🚀 Starting instance(s)..."
-      case opts[:mode]
-      when :mp, :both then start_mp_and_wait(opts, config_overrides)
-      when :server then start_server_and_wait(opts, config_overrides)
-      when :client then start_client_and_wait(opts, config_overrides)
-      else start_sp_and_wait(opts, config_overrides)
+      case @opts[:mode]
+      when :mp, :both then start_mp_and_wait(config_overrides)
+      when :server then start_server_and_wait(config_overrides)
+      when :client then start_client_and_wait(config_overrides)
+      else start_sp_and_wait(config_overrides)
       end
       puts "\n✓ Instance(s) started. Use 'zbspec -i' for interactive console or 'zbspec' to run tests."
     end
 
-    def start_mp_and_wait(opts, config_overrides)
-      mp = MPHarness.new(config_path: opts[:config], verbosity: opts[:verbosity], config_overrides: config_overrides)
+    def start_mp_and_wait(config_overrides)
+      mp = MPHarness.new(config_path: @opts[:config], verbosity: @opts[:verbosity], config_overrides: config_overrides)
       mp.send(:launch_instances_parallel)
       wait_apis("Server", mp.server_api, mp.config['server_startup_timeout'] || 60, mp.server_launcher.pid)
       wait_apis("Client", mp.client_api, mp.config['startup_timeout'] || 120, mp.client_launcher.pid, print_wait: false)
     end
 
-    def start_server_and_wait(opts, config_overrides)
-      config = server_config(opts[:config], config_overrides)
-      launcher = GameLauncher.new(config, label: 'server', verbosity: opts[:verbosity])
+    def start_server_and_wait(config_overrides)
+      config = server_config(@opts[:config], config_overrides)
+      launcher = GameLauncher.new(config, label: 'server', verbosity: @opts[:verbosity])
       launcher.start
-      api = APIClient.new(port_file: File.join(config['cache_dir'], 'zbLuaAPI.txt'), label: 'server', verbosity: opts[:verbosity])
+      api = APIClient.new(port_file: File.join(config['cache_dir'], 'zbLuaAPI.txt'), label: 'server', verbosity: @opts[:verbosity])
       wait_apis("Server", api, config['server_startup_timeout'] || 60, launcher.pid)
     end
 
-    def start_client_and_wait(opts, config_overrides)
-      mp = MPHarness.new(config_path: opts[:config], verbosity: opts[:verbosity], client_only: true, config_overrides: config_overrides)
+    def start_client_and_wait(config_overrides)
+      mp = MPHarness.new(config_path: @opts[:config], verbosity: @opts[:verbosity], client_only: true, config_overrides: config_overrides)
       mp.send(:launch_instances_parallel)
       wait_apis("Server", mp.server_api, mp.config['server_startup_timeout'] || 60, mp.server_launcher.pid)
       wait_apis("Client", mp.client_api, mp.config['startup_timeout'] || 120, mp.client_launcher.pid, print_wait: false)
     end
 
-    def start_sp_and_wait(opts, config_overrides)
-      config = sp_config(opts[:config], config_overrides)
-      launcher = GameLauncher.new(config, verbosity: opts[:verbosity])
+    def start_sp_and_wait(config_overrides)
+      config = sp_config(@opts[:config], config_overrides)
+      launcher = GameLauncher.new(config, verbosity: @opts[:verbosity])
       launcher.start
-      api = APIClient.new(port_file: File.join(config['cache_dir'], 'zbLuaAPI.txt'), label: 'sp', verbosity: opts[:verbosity])
+      api = APIClient.new(port_file: File.join(config['cache_dir'], 'zbLuaAPI.txt'), label: 'sp', verbosity: @opts[:verbosity])
       wait_apis("SP", api, config['startup_timeout'] || 120, launcher.pid)
     end
 
@@ -553,34 +550,34 @@ module ZBSpec
 
     # --- Harness dispatch ---
 
-    def run_harness_dispatch(opts, discovery, test_runner, config_overrides)
-      spec_files = opts[:spec_files].empty? ? nil : opts[:spec_files]
-      base = { config_path: opts[:config], test_runner_class: test_runner, verbosity: opts[:verbosity], config_overrides: config_overrides }
+    def run_harness_dispatch(discovery, test_runner, config_overrides)
+      spec_files = @opts[:spec_files].empty? ? nil : @opts[:spec_files]
+      base = { config_path: @opts[:config], test_runner_class: test_runner, verbosity: @opts[:verbosity], config_overrides: config_overrides }
 
-      case opts[:mode]
+      case @opts[:mode]
       when :both
-        run_both_phases(opts, discovery, spec_files, base)
+        run_both_phases(discovery, spec_files, base)
       when :mp
         puts "\n🎮 Multiplayer mode: running specs on server and client"
-        MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: opts[:verbosity], config_overrides: config_overrides).run
+        MPHarness.new(config_path: @opts[:config], spec_files: spec_files, verbosity: @opts[:verbosity], config_overrides: config_overrides).run
       when :server
         puts "\n🖥️  Server mode: running specs on dedicated server"
         Harness.new(**base.merge(spec_files: spec_files || discovery.specs_for(:server), config_overrides: config_overrides.merge('server_mode' => true))).run
       when :client
         puts "\n💻 Client mode: running specs on MP client (auto-starting server)"
-        MPHarness.new(config_path: opts[:config], spec_files: spec_files || discovery.specs_for(:client), verbosity: opts[:verbosity], client_only: true, config_overrides: config_overrides).run
+        MPHarness.new(config_path: @opts[:config], spec_files: spec_files || discovery.specs_for(:client), verbosity: @opts[:verbosity], client_only: true, config_overrides: config_overrides).run
       else
         puts "\n🎮 Singleplayer mode"
         Harness.new(**base.merge(spec_files: spec_files || discovery.specs_for(:sp))).run
       end
     end
 
-    def run_both_phases(opts, discovery, spec_files, base)
+    def run_both_phases(discovery, spec_files, base)
       puts "\n" + "=" * 50 + "\n🎮 Phase 1: Singleplayer mode\n" + "=" * 50
       sp_files = spec_files || discovery.specs_for(:sp)
       Harness.new(**base.merge(spec_files: sp_files.empty? ? nil : sp_files)).run_without_exit
       puts "\n" + "=" * 50 + "\n🎮 Phase 2: Multiplayer mode\n" + "=" * 50
-      MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: opts[:verbosity], config_overrides: base[:config_overrides]).run
+      MPHarness.new(config_path: @opts[:config], spec_files: spec_files, verbosity: @opts[:verbosity], config_overrides: base[:config_overrides]).run
     end
   end
 end
