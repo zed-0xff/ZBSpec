@@ -6,8 +6,10 @@ PATH
 GEM
   remote: https://rubygems.org/
   specs:
+    amazing_print (2.0.0)
     ast (2.4.3)
     diff-lcs (1.6.2)
+    iostruct (0.7.0)
     json (2.18.1)
     language_server-protocol (3.17.0.5)
     lint_roller (1.1.0)
@@ -48,23 +50,32 @@ GEM
       parser (>= 3.3.7.2)
       prism (~> 1.7)
     ruby-progressbar (1.13.0)
+    sugar_png (0.5.6)
+      zpng (>= 0.4.2)
     unicode-display_width (3.2.0)
       unicode-emoji (~> 4.1)
     unicode-emoji (4.2.0)
+    zpng (0.4.6)
+      iostruct (>= 0.7.0)
+      rainbow (~> 3.1.1)
 
 PLATFORMS
   arm64-darwin-24
   ruby
 
 DEPENDENCIES
+  amazing_print
   rake (~> 13.0)
   rspec (~> 3.0)
   rubocop
+  sugar_png (~> 0.5.6)
   zbspec!
 
 CHECKSUMS
+  amazing_print (2.0.0) sha256=2e36aba46ac78d37ed27ca0e2056afe3583183bb5c64f157c246b267355e5d6a
   ast (2.4.3) sha256=954615157c1d6a382bc27d690d973195e79db7f55e9765ac7c481c60bdb4d383
   diff-lcs (1.6.2) sha256=9ae0d2cba7d4df3075fe8cd8602a8604993efc0dfa934cff568969efb1909962
+  iostruct (0.7.0) sha256=e93f2ffea3b79a0e1045f0e0bd3f202368d89c53b692878e693cf50603bae49c
   json (2.18.1) sha256=fe112755501b8d0466b5ada6cf50c8c3f41e897fa128ac5d263ec09eedc9f986
   language_server-protocol (3.17.0.5) sha256=fd1e39a51a28bf3eec959379985a72e296e9f9acfce46f6a79d31ca8760803cc
   lint_roller (1.1.0) sha256=2c0c845b632a7d172cb849cc90c1bce937a28c5c8ccccb50dfd46a485003cc87
@@ -83,9 +94,11 @@ CHECKSUMS
   rubocop (1.84.1) sha256=14cc626f355141f5a2ef53c10a68d66b13bb30639b26370a76559096cc6bcc1a
   rubocop-ast (1.49.0) sha256=49c3676d3123a0923d333e20c6c2dbaaae2d2287b475273fddee0c61da9f71fd
   ruby-progressbar (1.13.0) sha256=80fc9c47a9b640d6834e0dc7b3c94c9df37f08cb072b7761e4a71e22cff29b33
+  sugar_png (0.5.6)
   unicode-display_width (3.2.0) sha256=0cdd96b5681a5949cdbc2c55e7b420facae74c4aaf9a9815eee1087cb1853c42
   unicode-emoji (4.2.0) sha256=519e69150f75652e40bf736106cfbc8f0f73aa3fb6a65afe62fefa7f80b0f80f
   zbspec (0.0.2)
+  zpng (0.4.6) sha256=40f4629f7dac4864662fa5cdfe7b410cc4bc8e72e271d39551f084291e64246e
 
 BUNDLED WITH
   4.0.3

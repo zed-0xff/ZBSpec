@@ -24,6 +24,7 @@ end
 # Load all components
 require_relative 'zbspec/config'
 require_relative 'zbspec/api_client'
+require_relative 'zbspec/app_factory'
 require_relative 'zbspec/game_launcher'
 require_relative 'zbspec/test_case'
 require_relative 'zbspec/test_results'
