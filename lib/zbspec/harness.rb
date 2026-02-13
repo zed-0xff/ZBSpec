@@ -28,52 +28,11 @@ module ZBSpec
     end
 
     def run_without_exit
-      if verbosity > 0
-        puts '🚀 PZ Spec Harness Starting'
-        puts '=' * 50
-      end
-
-      # Launch game (if not already running)
-      launch_game_if_needed
-
-      # Discover API port (from file if using random port)
-      api_client.discover_port(timeout: startup_timeout, process_pid: launcher.pid)
-
-      # Wait for API to be ready
-      api_client.wait_for_ready(timeout: startup_timeout, process_pid: launcher.pid)
-      
-      # Sanity check: verify instance is running in expected mode
-      if config['server_mode']
-        is_server = api_client.execute('return isServer()')
-        raise "Instance should be server but isServer()=#{is_server}" unless is_server
-        puts "✓ Server ready" if verbosity > 0
-      elsif config['server_ip']
-        is_client = api_client.execute('return isClient()')
-        raise "Instance should be client but isClient()=#{is_client}" unless is_client
-        puts "✓ Client ready" if verbosity > 0
-        api_client.wait_for_player(timeout: startup_timeout, process_pid: launcher.pid)
-      else
-        # SP mode: should be neither client nor server
-        is_client = api_client.execute('return isClient()')
-        is_server = api_client.execute('return isServer()')
-        if is_client || is_server
-          raise "SP instance should be neither client nor server, but isClient=#{is_client}, isServer=#{is_server}"
-        end
-        puts "✓ SP ready" if verbosity > 0
-        api_client.wait_for_player(timeout: startup_timeout, process_pid: launcher.pid)
-      end
-
-      # Run all specs
-      puts "\n🧪 Running Specs" if verbosity > 0
-      results = test_runner.run_all
-
-      # Report results
-      reporter = TestReporter.new(results, verbosity: verbosity)
-      reporter.display
-
-      # Shutdown (if configured)
+      print_startup_banner
+      boot_instance_api
+      validate_instance_mode
+      results = run_specs_and_report
       launcher.stop if config['auto_shutdown']
-
       results
     rescue StandardError => e
       handle_error(e)
@@ -91,6 +50,54 @@ module ZBSpec
 
     def launch_game_if_needed
       launcher.start
+    end
+
+    def print_startup_banner
+      return unless verbosity > 0
+      puts '🚀 PZ Spec Harness Starting'
+      puts '=' * 50
+    end
+
+    def boot_instance_api
+      launch_game_if_needed
+      api_client.discover_port(timeout: startup_timeout, process_pid: launcher.pid)
+      api_client.wait_for_ready(timeout: startup_timeout, process_pid: launcher.pid)
+    end
+
+    def validate_instance_mode
+      return validate_server_mode if config['server_mode']
+      return validate_client_mode if config['server_ip']
+      validate_singleplayer_mode
+    end
+
+    def validate_server_mode
+      is_server = api_client.execute('return isServer()')
+      raise "Instance should be server but isServer()=#{is_server}" unless is_server
+      puts "✓ Server ready" if verbosity > 0
+    end
+
+    def validate_client_mode
+      is_client = api_client.execute('return isClient()')
+      raise "Instance should be client but isClient()=#{is_client}" unless is_client
+      puts "✓ Client ready" if verbosity > 0
+      api_client.wait_for_player(timeout: startup_timeout, process_pid: launcher.pid)
+    end
+
+    def validate_singleplayer_mode
+      is_client = api_client.execute('return isClient()')
+      is_server = api_client.execute('return isServer()')
+      if is_client || is_server
+        raise "SP instance should be neither client nor server, but isClient=#{is_client}, isServer=#{is_server}"
+      end
+      puts "✓ SP ready" if verbosity > 0
+      api_client.wait_for_player(timeout: startup_timeout, process_pid: launcher.pid)
+    end
+
+    def run_specs_and_report
+      puts "\n🧪 Running Specs" if verbosity > 0
+      results = test_runner.run_all
+      TestReporter.new(results, verbosity: verbosity).display
+      results
     end
 
     def handle_error(error)

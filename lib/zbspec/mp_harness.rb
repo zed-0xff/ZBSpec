@@ -24,26 +24,14 @@ module ZBSpec
     end
 
     def run
-      if @verbosity > 0
-        puts '🚀 ZBSpec Multiplayer Harness Starting'
-        puts '=' * 50
-      end
-
-      begin
-        # Launch both instances in parallel
-        launch_instances_parallel
-        
-        # Wait for both to be ready
-        wait_for_instances
-
-        # Run specs on both
-        run_specs
-
-      rescue StandardError => e
-        handle_error(e)
-      ensure
-        shutdown_if_needed
-      end
+      print_startup_banner
+      launch_instances_parallel
+      wait_for_instances
+      run_specs
+    rescue StandardError => e
+      handle_error(e)
+    ensure
+      shutdown_if_needed
     end
 
     private
@@ -67,11 +55,11 @@ module ZBSpec
     end
 
     def server_cache_dir
-      File.expand_path("./tmp/cache_server_#{ZBSpec.game_version_name(@config)}")
+      File.expand_path("./tmp/cache_server_#{game_version_name}")
     end
 
     def client_cache_dir
-      File.expand_path("./tmp/cache_client_#{ZBSpec.game_version_name(@config)}")
+      File.expand_path("./tmp/cache_client_#{game_version_name}")
     end
 
     def server_port_file
@@ -95,6 +83,16 @@ module ZBSpec
         puts "  ✓ Client started (PID: #{@client_launcher.pid})" if @verbosity > 0
       end
       threads.each(&:join)
+    end
+
+    def print_startup_banner
+      return unless @verbosity > 0
+      puts '🚀 ZBSpec Multiplayer Harness Starting'
+      puts '=' * 50
+    end
+
+    def game_version_name
+      GameLauncher.game_version_name(@config)
     end
 
     def wait_for_instances
