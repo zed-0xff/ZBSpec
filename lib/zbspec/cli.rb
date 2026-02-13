@@ -1,5 +1,6 @@
 # frozen_string_literal: true
 
+require 'amazing_print'
 require 'optparse'
 
 module ZBSpec
@@ -37,6 +38,7 @@ module ZBSpec
         zbspec --init             # Create default config and stub spec
         zbspec -V 42.13           # Use game config from game_configs/42.13
         zbspec -i                 # Interactive console (all instances)
+        zbspec -i --port 4444     # Interactive console (connect to port only, no config)
         zbspec --client -i        # Interactive console (client only)
         zbspec --server -i        # Interactive console (server only)
         zbspec spec/my_spec.lua   # Run specific spec file
@@ -49,6 +51,7 @@ module ZBSpec
       verbosity: 0,
       mode: :auto,
       interactive: false,
+      port: nil,
       restart: false,
       restart_only: false,
       game_version: nil,
@@ -71,6 +74,7 @@ module ZBSpec
       return puts("ZBSpec v#{ZBSpec::VERSION}") if opts[:version]
       return print_help(opts[:parser])    if opts[:help]
       return run_stop                     if opts[:mode] == :stop
+      return run_interactive_port(opts)   if opts[:interactive] && opts[:port]
 
       abort config_not_found_message(opts[:config]) unless File.exist?(opts[:config])
 
@@ -109,6 +113,7 @@ module ZBSpec
         opts.on('--restart', 'Restart before running specs') { options[:restart] = true }
         opts.on('--restart-only', 'Restart only, no tests') { options[:restart_only] = true }
         opts.on('-i', '--interactive', 'Interactive Lua console') { options[:interactive] = true }
+        opts.on('--port PORT', Integer, 'Connect to API port (with -i: skip config and instance discovery)') { |p| options[:port] = p }
         opts.on('-h', '--help', 'Show this help') { options[:help] = true }
         opts.on('--version', 'Show version') { options[:version] = true }
         opts.on('--init', 'Create default config and stub spec') { options[:init] = true }
@@ -297,6 +302,30 @@ module ZBSpec
 
     # --- Interactive ---
 
+    # Connect to a single port only; no config, no instance discovery
+    def run_interactive_port(opts)
+      port = opts[:port].to_i
+      abort "❌ Invalid port: #{opts[:port]}" if port <= 0 || port > 65_535
+
+      puts "🔧 Interactive Lua Console (port #{port})\n" + "=" * 50
+      client = APIClient.new(port: port)
+      unless client.ready?
+        abort "❌ Cannot connect to port #{port}. Is the game running with ZombieBuddy?"
+      end
+      puts "  ✓ Connected to port #{port}"
+
+      clients = { ":#{port}" => client }
+      cancel_pending_jobs(clients)
+      load_spec_helper(clients)
+
+      puts "\nType Lua code to execute. Type 'exit' or press Ctrl+D/Ctrl+C to quit.\n\n"
+      require 'readline'
+      setup_readline_history
+      trap('INT') { puts "\nBye!"; exit 0 }
+      interactive_repl_loop(clients, opts)
+      puts "Bye!"
+    end
+
     def run_interactive(opts)
       stop_instances(discover_cache_dirs(:auto)) if opts[:restart]
       puts "🔧 Interactive Lua Console\n" + "=" * 50
@@ -376,7 +405,12 @@ module ZBSpec
 
     def run_lua_line(client, lua, name, max_len, multi, opts)
       result = client.execute(lua)
-      puts multi ? "[#{name.ljust(max_len)}] #{result.inspect}" : result.inspect
+      ires = result.ai # amazing_print
+      if multi
+        puts ires.gsub(/^/, "[#{name.ljust(max_len)}] ")
+      else
+        puts ires
+      end
     rescue APIClient::LuaError => e
       prefix = multi ? "[#{name.ljust(max_len)}] " : ""
       puts "#{prefix}Error: #{e.error_message}"

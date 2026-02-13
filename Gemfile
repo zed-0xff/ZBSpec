@@ -4,6 +4,8 @@ source 'https://rubygems.org'
 
 gemspec
 
+gem 'amazing_print'
+
 group :development do
   gem 'rubocop', require: false
 end
