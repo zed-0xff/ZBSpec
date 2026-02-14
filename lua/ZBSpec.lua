@@ -12,18 +12,13 @@ local skipCurrentBlock = false
 local skipReason = nil
 local beforeEachStack = {}  -- Stack of before_each functions for nested describes
 local beforeAllStack = {}   -- Stack of before_all functions for nested describes
-local beforeAllRan = {}     -- Track which describe blocks have run their before_all
 described_class = nil       -- The class/table passed to describe(), if not a string
 
 
 function ZBSpec.getContext()
-    if isServer and isServer() then
-        return "server"
-    elseif isClient and isClient() then
-        return "client"
-    else
-        return "singleplayer"
-    end
+    if isServer and isServer() then return "server"
+    elseif isClient and isClient() then return "client"
+    else return "sp" end
 end
 
 -- Core test functions
@@ -74,39 +69,24 @@ end
 local pendingJobs = {}
 local jobCounter = 0
 
--- Wait for a condition to be true, yielding between polls
--- Each yield returns control to Java; next poll resumes here
--- Supports optional args for condition; timeout uses default
-function ZBSpec.wait_for(condition, ...)
+-- Wait for condition to be true (or false if invert); yields between polls. Timeout 10s.
+local function _wait_until(condition, invert, timeout_sec, ...)
     local args = { ... }
-    local unpackArgs = table.unpack or unpack
-    local timeout = 10
-    local startTime = os.time()
-    
-    while not condition(unpackArgs(args)) do
-        local now = os.time()
-        if now - startTime > timeout then
-            error(string.format("Timeout after %ds waiting for condition", timeout), 2)
+    local unpack = table.unpack or unpack
+    timeout_sec = timeout_sec or 10
+    local deadline = os.time() + timeout_sec
+    while (condition(unpack(args)) == invert) do
+        if os.time() >= deadline then
+            error(string.format("Timeout after %ds waiting for condition", timeout_sec), 2)
         end
         coroutine.yield("pending")
     end
 end
-
--- Wait for a condition to be false, yielding between polls
--- Supports optional args for condition; timeout uses default
+function ZBSpec.wait_for(condition, ...)
+    _wait_until(condition, false, 10, ...)
+end
 function ZBSpec.wait_for_not(condition, ...)
-    local args = { ... }
-    local unpackArgs = table.unpack or unpack
-    local timeout = 10
-    local startTime = os.time()
-    
-    while condition(unpackArgs(args)) do
-        local now = os.time()
-        if now - startTime > timeout then
-            error(string.format("Timeout after %ds waiting for condition", timeout), 2)
-        end
-        coroutine.yield("pending")
-    end
+    _wait_until(condition, true, 10, ...)
 end
 
 -- Wait for a method on an object to return true
@@ -124,21 +104,9 @@ function ZBSpec.wait_for_this(obj, method, ...)
     end, ...)
 end
 
--- Aliases for backward compatibility
-ZBSpec.wait_until = ZBSpec.wait_for
-ZBSpec.wait_until_not = ZBSpec.wait_for_not
-ZBSpec.wait_until_this = ZBSpec.wait_for_this
-
--- Sleep for N seconds (yields between polls)
 function ZBSpec.sleep(seconds)
-    local startTime = os.time()
-    local target = startTime + seconds
-    
-    while true do
-        local now = os.time()
-        if now >= target then
-            return
-        end
+    local start = os.time()
+    while os.time() - start < seconds do
         coroutine.yield("pending")
     end
 end
@@ -180,48 +148,16 @@ function ZBSpec.runDetailedAsync()
     for _, t in ipairs(testList) do
         ZBSpec_currentTest = t.name
         described_class = t.described_class
-        local testOk = true
-        local testErr = nil
-        
-        -- Run before_all hooks once per describe block (can yield)
-        if t.before_all and t.describe and not ranBeforeAll[t.describe] then
-            ranBeforeAll[t.describe] = true
-            for _, hook in ipairs(t.before_all) do
-                local ok, err = run_with_yield(hook)
-                if not ok then
-                    testOk = false
-                    testErr = tostring(err)
-                    break
-                end
-            end
-        end
-        
-        -- Run before_each hooks (can yield)
-        if testOk and t.before_each then
-            for _, hook in ipairs(t.before_each) do
-                local ok, err = run_with_yield(hook)
-                if not ok then
-                    testOk = false
-                    testErr = tostring(err)
-                    break
-                end
-            end
-        end
-        
-        -- Run test in its own coroutine to catch errors via resume
+        local testOk, testErr = run_before_hooks(t, ranBeforeAll, run_with_yield)
         if testOk then
-            local ok, err = run_with_yield(t.fn)
-            if not ok then
-                testOk = false
-                testErr = tostring(err)
-            end
+            testOk, testErr = run_with_yield(t.fn)
         end
         
         if testOk then
             results.passed = results.passed + 1
         else
             results.failed = results.failed + 1
-            table.insert(results.errors, { name = t.name, error = testErr })
+            table.insert(results.errors, { name = t.name, error = tostring(testErr or "unknown") })
         end
     end
     
@@ -262,26 +198,18 @@ function ZBSpec.runAsync()
     return jobId
 end
 
--- Poll a job, resuming the coroutine once
--- Returns: { status = "pending|completed|error", result = ..., error = ... }
 function ZBSpec.poll(jobId)
     local job = pendingJobs[jobId]
     if not job then
         return { status = "error", error = "Unknown job: " .. tostring(jobId) }
     end
-    
-    -- Already done?
     if job.status ~= "pending" then
-        local result = { status = job.status }
-        if job.result then result.result = job.result end
-        if job.error then result.error = job.error end
-        if job.status ~= "pending" then
-            pendingJobs[jobId] = nil  -- cleanup
-        end
-        return result
+        local r = { status = job.status }
+        if job.result then r.result = job.result end
+        if job.error then r.error = job.error end
+        pendingJobs[jobId] = nil
+        return r
     end
-    
-    -- Resume coroutine once
     local co = job.coroutine
     if coroutine.status(co) == "suspended" then
         local ok, result = coroutine.resume(co)
@@ -294,14 +222,11 @@ function ZBSpec.poll(jobId)
     elseif coroutine.status(co) == "dead" then
         job.status = "completed"
     end
-    
-    local response = { status = job.status }
-    if job.result then response.result = job.result end
-    if job.error then response.error = job.error end
-    if job.status ~= "pending" then
-        pendingJobs[jobId] = nil  -- cleanup
-    end
-    return response
+    local r = { status = job.status }
+    if job.result then r.result = job.result end
+    if job.error then r.error = job.error end
+    if job.status ~= "pending" then pendingJobs[jobId] = nil end
+    return r
 end
 
 -- Cancel all pending async jobs (useful before interactive mode)
@@ -364,241 +289,122 @@ function ZBSpec.pending(name, fn)
     table.insert(skipped, { name = fullName, reason = "pending" })
 end
 
--- Helper to create context-specific describe
-local function makeContextDescribe(shouldSkip, skipReasonFn)
-    return function(name, fn)
-        if shouldSkip() then
-            local prevSkip = skipCurrentBlock
-            local prevReason = skipReason
-            skipCurrentBlock = true
-            skipReason = skipReasonFn()
-            ZBSpec.describe(name, fn)
-            skipCurrentBlock = prevSkip
-            skipReason = prevReason
-        else
-            ZBSpec.describe(name, fn)
-        end
-    end
+-- Assertions (minimal busted-like: assert(cond, msg), assert.are.equal, assert.is_*, assert.throws)
+ZBSpec.assert = {}
+local function fail(msg) error(msg or "assertion failed", 2) end
+local function assert_type(val, want)
+    if type(val) ~= want then fail(string.format("expected %s, got %s", want, type(val))) end
 end
 
--- Assertions
-ZBSpec.assert = {}
-
--- Make assert callable: assert(condition, message)
 setmetatable(ZBSpec.assert, {
-    __call = function(self, condition, message)
-        if not condition then
-            error(message or "assertion failed", 2)
-        end
-    end
+    __call = function(_, condition, message) if not condition then fail(message) end end
 })
 
-function ZBSpec.assert.is_equal(expected, actual)
-    if expected ~= actual then
-        error(string.format("expected %s, got %s", tostring(expected), tostring(actual)), 2)
+ZBSpec.assert.are = {
+    equal = function(expected, actual)
+        if expected ~= actual then fail(string.format("expected %s, got %s", tostring(expected), tostring(actual))) end
     end
-end
+}
+ZBSpec.assert.is_equal = ZBSpec.assert.are.equal
 
-function ZBSpec.assert.is_true(value, msg)
-    if not value then
-        error(msg or "expected true, got false", 2)
-    end
-end
+function ZBSpec.assert.is_true(value, msg) if not value then fail(msg or "expected true, got false") end end
+function ZBSpec.assert.is_false(value, msg) if value then fail(msg or "expected false, got true") end end
+function ZBSpec.assert.is_nil(value) if value ~= nil then fail(string.format("expected nil, got %s", tostring(value))) end end
+function ZBSpec.assert.is_not_nil(value) if value == nil then fail("expected non-nil value") end end
 
-function ZBSpec.assert.is_false(value, msg)
-    if value then
-        error(msg or "expected false, got true", 2)
-    end
-end
+function ZBSpec.assert.is_string(v) assert_type(v, "string") end
+function ZBSpec.assert.is_number(v) assert_type(v, "number") end
+function ZBSpec.assert.is_table(v) assert_type(v, "table") end
+function ZBSpec.assert.is_function(v) assert_type(v, "function") end
+function ZBSpec.assert.is_boolean(v) assert_type(v, "boolean") end
 
-function ZBSpec.assert.is_nil(value)
-    if value ~= nil then
-        error(string.format("expected nil, got %s", tostring(value)), 2)
-    end
-end
-
-function ZBSpec.assert.is_not_nil(value)
-    if value == nil then
-        error("expected non-nil value", 2)
-    end
-end
-
-function ZBSpec.assert.is_table(value)
-    if type(value) ~= "table" then
-        error(string.format("expected table, got %s", type(value)), 2)
-    end
-end
-
-function ZBSpec.assert.is_number(value)
-    if type(value) ~= "number" then
-        error(string.format("expected number, got %s", type(value)), 2)
-    end
-end
-
-function ZBSpec.assert.is_string(value)
-    if type(value) ~= "string" then
-        error(string.format("expected string, got %s", type(value)), 2)
-    end
-end
-
-function ZBSpec.assert.is_function(value)
-    if type(value) ~= "function" then
-        error(string.format("expected function, got %s", type(value)), 2)
-    end
-end
-
-function ZBSpec.assert.is_boolean(value)
-    if type(value) ~= "boolean" then
-        error(string.format("expected boolean, got %s", type(value)), 2)
-    end
-end
-
-function ZBSpec.assert.greater_than(threshold, actual)
-    if not (actual > threshold) then
-        error(string.format("expected %s > %s", tostring(actual), tostring(threshold)), 2)
-    end
-end
-
-function ZBSpec.assert.less_than(threshold, actual)
-    if not (actual < threshold) then
-        error(string.format("expected %s < %s", tostring(actual), tostring(threshold)), 2)
-    end
-end
+function ZBSpec.assert.greater_than(threshold, actual) if not (actual > threshold) then fail(string.format("expected %s > %s", tostring(actual), tostring(threshold))) end end
+function ZBSpec.assert.less_than(threshold, actual) if not (actual < threshold) then fail(string.format("expected %s < %s", tostring(actual), tostring(threshold))) end end
 
 function ZBSpec.assert.matches(pattern, str)
-    if type(str) ~= "string" then
-        error(string.format("expected string, got %s", type(str)), 2)
-    end
-    if not string.match(str, pattern) then
-        error(string.format("'%s' does not match pattern '%s'", str, pattern), 2)
-    end
+    assert_type(str, "string")
+    if not string.match(str, pattern) then fail(string.format("'%s' does not match '%s'", str, pattern)) end
 end
-
 function ZBSpec.assert.contains(needle, haystack)
     if type(haystack) == "string" then
-        if not string.find(haystack, needle, 1, true) then
-            error(string.format("'%s' does not contain '%s'", haystack, needle), 2)
-        end
+        if not string.find(haystack, needle, 1, true) then fail(string.format("'%s' does not contain '%s'", haystack, needle)) end
     elseif type(haystack) == "table" then
-        for _, v in pairs(haystack) do
-            if v == needle then return end
-        end
-        error(string.format("table does not contain %s", tostring(needle)), 2)
-    else
-        error(string.format("expected string or table, got %s", type(haystack)), 2)
-    end
+        for _, v in pairs(haystack) do if v == needle then return end end
+        fail(string.format("table does not contain %s", tostring(needle)))
+    else fail(string.format("expected string or table, got %s", type(haystack))) end
 end
-
 function ZBSpec.assert.has_key(key, tbl)
-    if type(tbl) ~= "table" then
-        error(string.format("expected table, got %s", type(tbl)), 2)
-    end
-    if tbl[key] == nil then
-        error(string.format("table does not have key '%s'", tostring(key)), 2)
-    end
+    assert_type(tbl, "table")
+    if tbl[key] == nil then fail(string.format("table does not have key '%s'", tostring(key))) end
 end
-
 function ZBSpec.assert.throws(fn, expected_msg)
     local ok, err = pcall(fn)
-    if ok then
-        error("expected function to throw, but it did not", 2)
-    end
+    if ok then fail("expected function to throw, but it did not") end
     if expected_msg and not string.find(tostring(err), expected_msg, 1, true) then
-        error(string.format("expected error containing '%s', got '%s'", expected_msg, tostring(err)), 2)
+        fail(string.format("expected error containing '%s', got '%s'", expected_msg, tostring(err)))
     end
 end
 
 -- Current test name; set before each test so ZombieBuddy HTTP error response can include it (X-ZombieBuddy-Error-Globals: ZBSpec_currentTest)
 ZBSpec_currentTest = nil
 
--- Run all tests - no pcall, errors propagate with full info
+-- Run before_all (once per describe) and before_each for test t; mutates ranBeforeAll. Optional runner(fn) returns ok, err (if absent, fn is called directly).
+local function run_before_hooks(t, ranBeforeAll, runner)
+    local function run(fn)
+        if runner then return runner(fn) else fn(); return true end
+    end
+    if t.before_all and t.describe and not ranBeforeAll[t.describe] then
+        ranBeforeAll[t.describe] = true
+        for _, hook in ipairs(t.before_all) do
+            local ok, err = run(hook); if not ok then return false, err end
+        end
+    end
+    if t.before_each then
+        for _, hook in ipairs(t.before_each) do
+            local ok, err = run(hook); if not ok then return false, err end
+        end
+    end
+    return true
+end
+
 function ZBSpec.run()
     local testList = tests
     tests = {}
     skipped = {}
-    
-    -- Track which describe blocks have run their before_all
     local ranBeforeAll = {}
-    
     for _, t in ipairs(testList) do
         ZBSpec_currentTest = t.name
         described_class = t.described_class
-        -- Run before_all hooks once per describe block
-        if t.before_all and t.describe and not ranBeforeAll[t.describe] then
-            ranBeforeAll[t.describe] = true
-            for _, hook in ipairs(t.before_all) do
-                hook()
-            end
-        end
-        -- Run before_each hooks
-        if t.before_each then
-            for _, hook in ipairs(t.before_each) do
-                hook()
-            end
-        end
-        t.fn()  -- Let errors propagate naturally
+        run_before_hooks(t, ranBeforeAll, nil)
+        t.fn()
     end
-    
     ZBSpec_currentTest = nil
     described_class = nil
     return true
 end
 
--- Get detailed results (for advanced reporting)
 function ZBSpec.runDetailed()
     errors = {}
-    local passed = 0
-    local failed = 0
-    
-    -- Track which describe blocks have run their before_all
+    local passed, failed = 0, 0
     local ranBeforeAll = {}
-    
     for _, t in ipairs(tests) do
         described_class = t.described_class
         ZBSpec_currentTest = t.name
         local ok, err = pcall(function()
-            -- Run before_all hooks once per describe block
-            if t.before_all and t.describe and not ranBeforeAll[t.describe] then
-                ranBeforeAll[t.describe] = true
-                for _, hook in ipairs(t.before_all) do
-                    hook()
-                end
-            end
-            -- Run before_each hooks
-            if t.before_each then
-                for _, hook in ipairs(t.before_each) do
-                    hook()
-                end
-            end
+            run_before_hooks(t, ranBeforeAll, nil)
             t.fn()
         end)
-        if ok then
-            passed = passed + 1
-        else
-            failed = failed + 1
-            table.insert(errors, { name = t.name, error = tostring(err) })
-        end
+        if ok then passed = passed + 1
+        else failed = failed + 1; table.insert(errors, { name = t.name, error = tostring(err) }) end
         ZBSpec_currentTest = nil
     end
-    
     described_class = nil
-    local result = {
-        passed = passed,
-        failed = failed,
-        skipped = #skipped,
-        context = ZBSpec.getContext(),
-        errors = errors,
-        skipped_tests = skipped
-    }
-    
-    -- Reset for next run
+    local result = { passed = passed, failed = failed, skipped = #skipped, context = ZBSpec.getContext(), errors = errors, skipped_tests = skipped }
     tests = {}
     skipped = {}
-    
     return result
 end
 
--- Reset state (useful between spec files)
 function ZBSpec.reset()
     tests = {}
     skipped = {}
@@ -608,7 +414,6 @@ function ZBSpec.reset()
     skipReason = nil
     beforeEachStack = {}
     beforeAllStack = {}
-    -- Don't reset pendingCoroutines or tickHandlerRegistered - those are persistent
 end
 
 ---------------------------------------------
@@ -706,10 +511,6 @@ before_each = ZBSpec.before_each
 wait_for = ZBSpec.wait_for
 wait_for_not = ZBSpec.wait_for_not
 wait_for_this = ZBSpec.wait_for_this
--- Backward compatibility aliases
-wait_until = ZBSpec.wait_for
-wait_until_not = ZBSpec.wait_for_not
-wait_until_this = ZBSpec.wait_for_this
 sleep = ZBSpec.sleep
 -- Remote execution
 server_exec = ZBSpec.server_exec
