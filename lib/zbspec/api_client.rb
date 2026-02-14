@@ -7,14 +7,15 @@ module ZBSpec
     LABEL_WIDTH = 8  # "[server] " width
 
     attr_reader :port, :base_uri, :host, :label
-    attr_accessor :verbosity
+    attr_accessor :verbosity, :sandbox
 
-    def initialize(port: nil, host: '127.0.0.1', port_file: nil, label: nil, verbosity: 0)
+    def initialize(port: nil, host: '127.0.0.1', port_file: nil, label: nil, verbosity: 0, sandbox: true)
       @port = port
       @host = host
       @port_file = port_file
       @label = label
       @verbosity = verbosity
+      @sandbox = sandbox
       @base_uri = port ? URI("http://#{host}:#{port}/lua") : nil
     end
 
@@ -101,10 +102,12 @@ module ZBSpec
     ERROR_GLOBAL_HEADER = 'X-ZombieBuddy-Error-Globals'.freeze
     ERROR_GLOBAL_VALUE  = 'ZBSpec_currentTest'.freeze
 
-    # Execute Lua code in the game
+    # Execute Lua code in the game.
+    # When sandbox is false (from config), sends sandbox=false so server uses global _G.
     def execute(lua_code, depth: 5, chunkname: nil, retries: 3)
       uri = base_uri.dup
       params = ["depth=#{depth}"]
+      params << "sandbox=false" if @sandbox == false
       params << "chunkname=#{URI.encode_www_form_component(chunkname)}" if chunkname
       uri.query = params.join('&')
 

@@ -23,7 +23,8 @@ module ZBSpec
       'game_versions' => ['default'],
       'debug' => true,
       'mods' => [],
-      'spec_glob' => 'spec/**/*_spec.lua'
+      'spec_glob' => 'spec/**/*_spec.lua',
+      'sandbox' => true                 # Lua execution env: true = request-scoped env, false = global _G
     }.freeze
 
     attr_reader :data
