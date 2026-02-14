@@ -27,9 +27,45 @@ module ZBSpec
           puts "\n💻 Client mode: running specs on MP client (auto-starting server)"
           MPHarness.new(config_path: opts[:config], spec_files: spec_files || discovery.specs_for(:client), verbosity: opts[:verbosity], client_only: true, config_overrides: config_overrides).run
         else
-          puts "\n🎮 Singleplayer mode"
-          Harness.new(**base.merge(spec_files: spec_files || discovery.specs_for(:sp))).run
+          run_sp(opts, discovery, spec_files, base, config_overrides)
         end
+      end
+
+      def run_sp(opts, discovery, spec_files, base, config_overrides)
+        puts "\n🎮 Singleplayer mode"
+
+        config = Config.new(opts[:config])
+        config_overrides.each { |k, v| config[k] = v }
+        versions = config_overrides['game_version'] ? [config_overrides['game_version']] : Array(config['game_versions'])
+        versions = versions.map(&:to_s).uniq
+
+        if versions.size <= 1
+          Harness.new(**base.merge(spec_files: spec_files || discovery.specs_for(:sp))).run
+          return
+        end
+
+        puts "📦 Running specs on #{versions.size} versions in parallel: #{versions.join(', ')}"
+
+        threads = versions.map do |version|
+          Thread.new do
+            overrides = base[:config_overrides].merge('game_version' => version)
+            harness = Harness.new(**base.merge(spec_files: spec_files || discovery.specs_for(:sp), config_overrides: overrides))
+            [version, harness.run_without_exit]
+          end
+        end
+
+        version_results = threads.map(&:value)
+        combined = merge_results(version_results)
+        TestReporter.new(combined, verbosity: opts[:verbosity]).display
+        exit(combined.failed? ? 1 : 0)
+      end
+
+      def merge_results(version_results)
+        combined = TestResults.new
+        version_results.each do |version, results|
+          combined.add_section("game_version #{version}", results.all_tests)
+        end
+        combined
       end
 
       def run_both_phases(discovery, spec_files, base, opts)

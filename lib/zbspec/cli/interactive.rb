@@ -30,7 +30,7 @@ module ZBSpec
         Instances.stop_instances(Instances.discover_cache_dirs(:auto)) if opts[:restart]
         puts "🔧 Interactive Lua Console\n" + "=" * 50
 
-        clients = Instances.discover_interactive_clients(opts[:mode], verbosity: opts[:verbosity])
+        clients = Instances.discover_interactive_clients(opts[:mode], verbosity: opts[:verbosity], game_version: opts[:game_version])
         if clients.empty?
           puts "\n❌ No running instances found. Start a game first with:\n   zbspec --sp    # Singleplayer\n   zbspec --mp    # Multiplayer"
           exit 1
@@ -50,7 +50,7 @@ module ZBSpec
         path = opts[:script]
         abort "❌ Script file not found: #{path}" unless File.file?(path)
 
-        clients = Instances.discover_interactive_clients(:auto, verbosity: opts[:verbosity])
+        clients = Instances.discover_interactive_clients(:auto, verbosity: opts[:verbosity], game_version: opts[:game_version])
         if clients.empty?
           abort "❌ No running instances found. Start a game first (e.g. zbspec --sp)."
         end
@@ -130,14 +130,14 @@ module ZBSpec
           break if %w[exit quit].include?(line)
           next if line.empty?
           Readline::HISTORY.pop if Readline::HISTORY.size > 1 && Readline::HISTORY[-2] == line
-          lua = line.match?(/\breturn\b|;/) ? line : "return #{line}"
+          lua = line.match?(/\breturn\b|;|=/) ? line : "return #{line}" # XXX implicit return
           clients.each { |name, client| run_lua_line(client, lua, name, max_len, clients.size > 1, opts) }
         end
       end
 
       def run_lua_line(client, lua, name, max_len, multi, opts)
         result = client.execute(lua)
-        ires = result.ai # amazing_print
+        ires = result.ai(max_depth: 2) # amazing_print
         if multi
           puts ires.gsub(/^/, "[#{name.ljust(max_len)}] ")
         else

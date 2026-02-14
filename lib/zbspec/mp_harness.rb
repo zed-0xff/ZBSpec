@@ -129,8 +129,13 @@ module ZBSpec
       raise client_error if client_error
     end
 
+    GAME_SPEED_UNPAUSE = "if setGameSpeed then setGameSpeed(1) end".freeze
+    GAME_SPEED_PAUSE   = "if setGameSpeed then setGameSpeed(0) end".freeze
+
     def run_specs
       results = TestResults.new
+
+      [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_UNPAUSE) }
 
       # Determine which specs to run where
       # If specific files provided, filter by folder; otherwise use discovery
@@ -172,6 +177,8 @@ module ZBSpec
       reporter.display
 
       exit(results.failed? ? 1 : 0)
+    ensure
+      [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_PAUSE) }
     end
 
     def extract_tests(results)

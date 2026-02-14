@@ -158,6 +158,8 @@ module ZBSpec
 
       name = @name
       SugarPNG.new do
+        fg :white
+        bg :black
         width 64
         height 64
         text name.split.join("\n")

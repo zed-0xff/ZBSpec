@@ -40,20 +40,34 @@ module ZBSpec
         false
       end
 
-      def discover_cache_dirs(mode)
+      def discover_cache_dirs(mode, game_version: nil)
         all = Dir.glob('tmp/cache_*').select { |d| File.directory?(d) }.sort
         filter = { sp: 'cache_sp_', server: 'cache_server_', client: 'cache_client_' }
-        case mode
+        dirs = case mode
         when :sp then all.select { |d| d.include?(filter[:sp]) }
         when :server then all.select { |d| d.include?(filter[:server]) }
         when :client then all.select { |d| d.include?(filter[:client]) }
         when :mp, :both then all.select { |d| d.include?(filter[:server]) || d.include?(filter[:client]) }
         else all
         end
+        return dirs if game_version.nil? || game_version.to_s.empty?
+
+        v = game_version.to_s
+        dirs.select do |d|
+          base = File.basename(d)
+          case mode
+          when :sp then base == "cache_sp_#{v}"
+          when :server then base == "cache_server_#{v}"
+          when :client then base == "cache_client_#{v}"
+          when :mp, :both then base == "cache_server_#{v}" || base == "cache_client_#{v}"
+          when :auto then base == "cache_sp_#{v}" || base == "cache_server_#{v}" || base == "cache_client_#{v}"
+          else true
+          end
+        end
       end
 
-      def discover_interactive_clients(mode, verbosity: 0)
-        discover_cache_dirs(mode).each_with_object({}) do |cache_dir, out|
+      def discover_interactive_clients(mode, verbosity: 0, game_version: nil)
+        discover_cache_dirs(mode, game_version: game_version).each_with_object({}) do |cache_dir, out|
           port_file = File.join(cache_dir, 'zbLuaAPI.txt')
           next unless File.exist?(port_file)
           port = File.read(port_file).strip.to_i

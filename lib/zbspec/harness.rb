@@ -93,11 +93,19 @@ module ZBSpec
       api_client.wait_for_player(timeout: startup_timeout, process_pid: launcher.pid)
     end
 
+    GAME_SPEED_UNPAUSE = "if setGameSpeed then setGameSpeed(1) end".freeze
+    GAME_SPEED_PAUSE   = "if setGameSpeed then setGameSpeed(0) end".freeze
+
     def run_specs_and_report
       puts "\n🧪 Running Specs" if verbosity > 0
-      results = test_runner.run_all
-      TestReporter.new(results, verbosity: verbosity).display
-      results
+      api_client.execute(GAME_SPEED_UNPAUSE)
+      begin
+        results = test_runner.run_all
+        TestReporter.new(results, verbosity: verbosity).display
+        results
+      ensure
+        api_client.execute(GAME_SPEED_PAUSE)
+      end
     end
 
     def handle_error(error)
