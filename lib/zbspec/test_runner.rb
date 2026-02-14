@@ -105,12 +105,14 @@ module ZBSpec
               p e.raw_error
             end
           end
+          # Grab current test name from Lua (describe/context/it stack) so reporter shows the it() message
+          test_name = (api_client.execute('return (ZBSpec and ZBSpec.currentTest) or nil') rescue nil)
+          test_name = nil unless test_name.is_a?(String) && !test_name.to_s.strip.empty?
           # Lua execution error - include file:line if available
-          # Line numbers are now correct (no adjustment needed) thanks to multipart format
           location = e.line ? "#{spec_file}:#{e.line}" : spec_file
-          tests << test(location, false, 
-                        error: e.error_message, 
-                        test_name: e.test_name, 
+          tests << test(location, false,
+                        error: e.error_message,
+                        test_name: test_name || e.test_name,
                         assertion_name: e.assertion_name,
                         assertion_source: e.assertion_source)
         rescue StandardError => e
