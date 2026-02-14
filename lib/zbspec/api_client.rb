@@ -97,6 +97,10 @@ module ZBSpec
       true
     end
 
+    # Request header: ask ZombieBuddy to include this global's value in error response (errorGlobals). ZBSpec.lua sets ZBSpec_currentTest to the current test name before each test.
+    ERROR_GLOBAL_HEADER = 'X-ZombieBuddy-Error-Globals'.freeze
+    ERROR_GLOBAL_VALUE  = 'ZBSpec_currentTest'.freeze
+
     # Execute Lua code in the game
     def execute(lua_code, depth: 5, chunkname: nil, retries: 3)
       uri = base_uri.dup
@@ -104,10 +108,12 @@ module ZBSpec
       params << "chunkname=#{URI.encode_www_form_component(chunkname)}" if chunkname
       uri.query = params.join('&')
 
+      headers = { 'Content-Type' => 'text/plain', ERROR_GLOBAL_HEADER => ERROR_GLOBAL_VALUE }
+
       attempts = 0
       begin
         attempts += 1
-        response = Net::HTTP.post(uri, lua_code, 'Content-Type' => 'text/plain')
+        response = Net::HTTP.post(uri, lua_code, headers)
 
         # Handle error responses (500)
         if response.code == '500'
@@ -194,6 +200,14 @@ module ZBSpec
             # Extract best error message from luaReturn fields
             @error_message = extract_message_from_lua_return(@lua_return)
             extract_location_from_lua_return(@lua_return)
+          end
+          # Prefer errorGlobals[name] from response (X-ZombieBuddy-Error-Globals header) for test name
+          globals = data['errorGlobals']
+          if globals.is_a?(Hash) && globals[ERROR_GLOBAL_VALUE].to_s.strip != ''
+            @test_name = globals[ERROR_GLOBAL_VALUE].to_s.strip
+          end
+          if @lua_return
+            # already set error_message and location above
           elsif data['kahluaErrors'].is_a?(Array)
             # Java exception response with kahluaErrors attached
             @lua_return = { 'kahluaErrors' => data['kahluaErrors'] }

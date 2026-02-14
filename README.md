@@ -45,8 +45,6 @@ mods:
 Create `spec/example_spec.lua`:
 
 ```lua
-require "ZBSpec"
-
 describe("my feature", function()
     it("works correctly", function()
         assert.is_equal(4, 2 + 2)
@@ -79,8 +77,6 @@ zbspec -v
 ### Structure
 
 ```lua
-require "ZBSpec"
-
 -- Optional: require your mod's files
 require "MyMod_Data"
 
@@ -153,7 +149,6 @@ end, "specific")  -- error must contain this string
 ### Testing with Game State
 
 ```lua
-require "ZBSpec"
 require "MyMod"
 
 local player = getPlayer()
@@ -179,62 +174,6 @@ return ZBSpec.run()
 ### Client/Server Support
 
 ZBSpec supports running the same spec files in singleplayer, multiplayer client, and server contexts. Use context-specific describe blocks to write tests that work everywhere.
-
-#### Context Detection
-
-```lua
-ZBSpec.isClient()       -- true on MP client
-ZBSpec.isServer()       -- true on dedicated server
-ZBSpec.isMultiplayer()  -- true if MP (client or server)
-ZBSpec.isSingleplayer() -- true if SP
-ZBSpec.hasPlayer()      -- true if getPlayer() returns non-nil
-ZBSpec.getContext()     -- "client", "server", or "singleplayer"
-```
-
-#### Context-Specific Describe Blocks
-
-Tests in these blocks are automatically skipped when running in the wrong context:
-
-```lua
-require "ZBSpec"
-
--- Runs everywhere
-ZBSpec.describe("data validation", function()
-    it("has valid config", function()
-        assert.is_table(MyMod.config)
-    end)
-end)
-
--- Only runs on client (skipped on server)
-ZBSpec.client.describe("UI features", function()
-    it("has overlay", function()
-        assert.is_function(MyMod.renderOverlay)
-    end)
-end)
-
--- Only runs on dedicated server (skipped on client/SP)
-ZBSpec.server.describe("server commands", function()
-    it("handles commands", function()
-        assert.is_table(MyMod.ServerCommands)
-    end)
-end)
-
--- Only runs in singleplayer
-ZBSpec.sp.describe("SP-only features", function()
-    it("works offline", function()
-        -- ...
-    end)
-end)
-
--- Only runs in multiplayer (client or server)
-ZBSpec.mp.describe("MP features", function()
-    it("syncs data", function()
-        -- ...
-    end)
-end)
-
-return ZBSpec.run()
-```
 
 #### Pending Tests
 

@@ -36,7 +36,6 @@ module ZBSpec
       def stub_spec
         <<~LUA
           -- Stub spec (created by zbspec --init)
-          require "ZBSpec"
           describe("example", function()
               it("passes", function()
                   assert.is_equal(4, 2 + 2)

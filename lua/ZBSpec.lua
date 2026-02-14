@@ -16,31 +16,10 @@ local beforeAllRan = {}     -- Track which describe blocks have run their before
 described_class = nil       -- The class/table passed to describe(), if not a string
 
 
--- Context detection
-function ZBSpec.isClient()
-    return isClient and isClient()
-end
-
-function ZBSpec.isServer()
-    return isServer and isServer()
-end
-
-function ZBSpec.isMultiplayer()
-    return ZBSpec.isClient() or ZBSpec.isServer()
-end
-
-function ZBSpec.isSingleplayer()
-    return not ZBSpec.isMultiplayer()
-end
-
-function ZBSpec.hasPlayer()
-    return getPlayer and getPlayer() ~= nil
-end
-
 function ZBSpec.getContext()
-    if ZBSpec.isServer() then
+    if isServer and isServer() then
         return "server"
-    elseif ZBSpec.isClient() then
+    elseif isClient and isClient() then
         return "client"
     else
         return "singleplayer"
@@ -199,7 +178,7 @@ function ZBSpec.runDetailedAsync()
     local ranBeforeAll = {}
     
     for _, t in ipairs(testList) do
-        ZBSpec.currentTest = t.name
+        ZBSpec_currentTest = t.name
         described_class = t.described_class
         local testOk = true
         local testErr = nil
@@ -246,7 +225,7 @@ function ZBSpec.runDetailedAsync()
         end
     end
     
-    ZBSpec.currentTest = nil
+    ZBSpec_currentTest = nil
     described_class = nil
     results.skipped = #skippedList
     return results
@@ -402,35 +381,6 @@ local function makeContextDescribe(shouldSkip, skipReasonFn)
     end
 end
 
--- Context-specific namespaces
-ZBSpec.client = {
-    describe = makeContextDescribe(
-        function() return ZBSpec.isServer() end,
-        function() return "client only (running on server)" end
-    )
-}
-
-ZBSpec.server = {
-    describe = makeContextDescribe(
-        function() return ZBSpec.isClient() or ZBSpec.isSingleplayer() end,
-        function() return "server only (running on " .. ZBSpec.getContext() .. ")" end
-    )
-}
-
-ZBSpec.sp = {
-    describe = makeContextDescribe(
-        function() return ZBSpec.isMultiplayer() end,
-        function() return "singleplayer only (running in multiplayer)" end
-    )
-}
-
-ZBSpec.mp = {
-    describe = makeContextDescribe(
-        function() return ZBSpec.isSingleplayer() end,
-        function() return "multiplayer only (running in singleplayer)" end
-    )
-}
-
 -- Assertions
 ZBSpec.assert = {}
 
@@ -558,8 +508,8 @@ function ZBSpec.assert.throws(fn, expected_msg)
     end
 end
 
--- Current test being run (for error context)
-ZBSpec.currentTest = nil
+-- Current test name; set before each test so ZombieBuddy HTTP error response can include it (X-ZombieBuddy-Error-Globals: ZBSpec_currentTest)
+ZBSpec_currentTest = nil
 
 -- Run all tests - no pcall, errors propagate with full info
 function ZBSpec.run()
@@ -571,7 +521,7 @@ function ZBSpec.run()
     local ranBeforeAll = {}
     
     for _, t in ipairs(testList) do
-        ZBSpec.currentTest = t.name
+        ZBSpec_currentTest = t.name
         described_class = t.described_class
         -- Run before_all hooks once per describe block
         if t.before_all and t.describe and not ranBeforeAll[t.describe] then
@@ -589,7 +539,7 @@ function ZBSpec.run()
         t.fn()  -- Let errors propagate naturally
     end
     
-    ZBSpec.currentTest = nil
+    ZBSpec_currentTest = nil
     described_class = nil
     return true
 end
@@ -605,6 +555,7 @@ function ZBSpec.runDetailed()
     
     for _, t in ipairs(tests) do
         described_class = t.described_class
+        ZBSpec_currentTest = t.name
         local ok, err = pcall(function()
             -- Run before_all hooks once per describe block
             if t.before_all and t.describe and not ranBeforeAll[t.describe] then
@@ -627,6 +578,7 @@ function ZBSpec.runDetailed()
             failed = failed + 1
             table.insert(errors, { name = t.name, error = tostring(err) })
         end
+        ZBSpec_currentTest = nil
     end
     
     described_class = nil

@@ -70,13 +70,12 @@ module ZBSpec
         # Remember log position before test
         log_pos_before = log_file_size
         
-        # Use multipart format: each file gets its own chunkname for correct line numbers
+        # Use multipart format: ZBSpec.lua first, then spec_helper, then spec file (each with its own chunkname)
         # Format: ---FILE:filename---\ncontent\n---FILE:filename2---\ncontent2...
-        # All files execute in same Lua context, but with correct line numbers in logs
+        zbspec_code = load_zbspec_lua
         lua_code = ''
-        if !spec_helper_code.empty?
-          lua_code += "---FILE:spec/spec_helper.lua---\n#{spec_helper_code}"
-        end
+        lua_code += "---FILE:ZBSpec.lua---\n#{zbspec_code}" unless zbspec_code.empty?
+        lua_code += "---FILE:spec/spec_helper.lua---\n#{spec_helper_code}" unless spec_helper_code.empty?
         lua_code += "---FILE:#{spec_file}---\n#{File.read(spec_file)}"
         
         begin
@@ -105,14 +104,11 @@ module ZBSpec
               p e.raw_error
             end
           end
-          # Grab current test name from Lua (describe/context/it stack) so reporter shows the it() message
-          test_name = (api_client.execute('return (ZBSpec and ZBSpec.currentTest) or nil') rescue nil)
-          test_name = nil unless test_name.is_a?(String) && !test_name.to_s.strip.empty?
-          # Lua execution error - include file:line if available
+          # test_name comes from X-ZombieBuddy-Error-Global (errorGlobal in 500 response) when supported
           location = e.line ? "#{spec_file}:#{e.line}" : spec_file
           tests << test(location, false,
                         error: e.error_message,
-                        test_name: test_name || e.test_name,
+                        test_name: e.test_name,
                         assertion_name: e.assertion_name,
                         assertion_source: e.assertion_source)
         rescue StandardError => e
@@ -191,6 +187,13 @@ module ZBSpec
     # Helper to create a test case
     def test(name, passed, error: nil, test_name: nil, assertion_name: nil, assertion_source: nil)
       TestCase.new(name, passed, error: error, test_name: test_name, assertion_name: assertion_name, assertion_source: assertion_source)
+    end
+
+    # Load ZBSpec.lua framework (sent via multipart before spec_helper and spec file)
+    def load_zbspec_lua
+      path = File.join(ZBSpec.root, 'lua', 'ZBSpec.lua')
+      return '' unless File.file?(path)
+      File.read(path) + "\n"
     end
 
     # Load spec_helper.lua if it exists
