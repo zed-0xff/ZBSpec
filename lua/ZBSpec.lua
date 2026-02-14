@@ -148,7 +148,7 @@ function ZBSpec.runDetailedAsync()
     for _, t in ipairs(testList) do
         ZBSpec_currentTest = t.name
         described_class = t.described_class
-        local testOk, testErr = run_before_hooks(t, ranBeforeAll, run_with_yield)
+        local testOk, testErr = ZBSpec.run_before_hooks(t, ranBeforeAll, run_with_yield)
         if testOk then
             testOk, testErr = run_with_yield(t.fn)
         end
@@ -349,7 +349,7 @@ end
 ZBSpec_currentTest = nil
 
 -- Run before_all (once per describe) and before_each for test t; mutates ranBeforeAll. Optional runner(fn) returns ok, err (if absent, fn is called directly).
-local function run_before_hooks(t, ranBeforeAll, runner)
+function ZBSpec.run_before_hooks(t, ranBeforeAll, runner)
     local function run(fn)
         if runner then return runner(fn) else fn(); return true end
     end
@@ -375,7 +375,7 @@ function ZBSpec.run()
     for _, t in ipairs(testList) do
         ZBSpec_currentTest = t.name
         described_class = t.described_class
-        run_before_hooks(t, ranBeforeAll, nil)
+        ZBSpec.run_before_hooks(t, ranBeforeAll, nil)
         t.fn()
     end
     ZBSpec_currentTest = nil
@@ -391,7 +391,7 @@ function ZBSpec.runDetailed()
         described_class = t.described_class
         ZBSpec_currentTest = t.name
         local ok, err = pcall(function()
-            run_before_hooks(t, ranBeforeAll, nil)
+            ZBSpec.run_before_hooks(t, ranBeforeAll, nil)
             t.fn()
         end)
         if ok then passed = passed + 1
