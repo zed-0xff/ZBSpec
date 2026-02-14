@@ -66,14 +66,14 @@ module ZBSpec
         end
       end
 
-      def discover_interactive_clients(mode, verbosity: 0, game_version: nil)
+      def discover_interactive_clients(mode, verbosity: 0, game_version: nil, sandbox: true)
         discover_cache_dirs(mode, game_version: game_version).each_with_object({}) do |cache_dir, out|
           port_file = File.join(cache_dir, 'zbLuaAPI.txt')
           next unless File.exist?(port_file)
           port = File.read(port_file).strip.to_i
           next if port <= 0
           name = File.basename(cache_dir).sub('cache_', '')
-          client = APIClient.new(port: port, verbosity: verbosity)
+          client = APIClient.new(port: port, verbosity: verbosity, sandbox: sandbox)
           out[name] = { client: client, port: port } if client.ready?
         end
       end

@@ -11,7 +11,7 @@ module ZBSpec
         puts "  ✓ Connected to port #{port}"
 
         clients = one_client_hash(port, client)
-        load_spec_helper(clients)
+        load_spec_helper(clients) if opts[:helper]
 
         execute_script_on_clients(clients, opts[:script], exit_on_error: true) if opts[:script]
 
@@ -30,7 +30,7 @@ module ZBSpec
         Instances.stop_instances(Instances.discover_cache_dirs(:auto)) if opts[:restart]
         puts "🔧 Interactive Lua Console\n" + "=" * 50
 
-        clients = Instances.discover_interactive_clients(opts[:mode], verbosity: opts[:verbosity], game_version: opts[:game_version])
+        clients = Instances.discover_interactive_clients(opts[:mode], verbosity: opts[:verbosity], game_version: opts[:game_version], sandbox: opts[:sandbox])
         if clients.empty?
           puts "\n❌ No running instances found. Start a game first with:\n   zbspec --sp    # Singleplayer\n   zbspec --mp    # Multiplayer"
           exit 1
@@ -39,7 +39,7 @@ module ZBSpec
         max_len = clients.keys.map(&:length).max
         clients.each { |name, data| puts "  ✓ Connected to #{name.ljust(max_len)} (port #{data[:port]})" }
         clients.transform_values! { |data| data[:client] }
-        load_spec_helper(clients)
+        load_spec_helper(clients) if opts[:helper]
 
         execute_script_on_clients(clients, opts[:script], exit_on_error: false) if opts[:script]
 
@@ -95,7 +95,8 @@ module ZBSpec
       def connect_port_client(opts)
         port = opts[:port].to_i
         abort "❌ Invalid port: #{opts[:port]}" if port <= 0 || port > 65_535
-        client = APIClient.new(port: port, verbosity: opts[:verbosity])
+        sandbox = opts[:interactive] ? opts[:sandbox] : true
+        client = APIClient.new(port: port, verbosity: opts[:verbosity], sandbox: sandbox)
         unless client.ready?
           abort "❌ Cannot connect to port #{port}. Is the game running with ZombieBuddy?"
         end
