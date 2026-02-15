@@ -22,42 +22,70 @@ module ZBSpec
           MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: opts[:verbosity], config_overrides: config_overrides).run
         when :server
           puts "\n🖥️  Server mode: running specs on dedicated server"
-          Harness.new(**base.merge(spec_files: spec_files || discovery.specs_for(:server), config_overrides: config_overrides.merge('server_mode' => true))).run
+          run_server_versions(discovery, spec_files, base, config_overrides, opts)
         when :client
           puts "\n💻 Client mode: running specs on MP client (auto-starting server)"
-          MPHarness.new(config_path: opts[:config], spec_files: spec_files || discovery.specs_for(:client), verbosity: opts[:verbosity], client_only: true, config_overrides: config_overrides).run
+          run_client_versions(discovery, spec_files, base, config_overrides, opts)
         else
           run_sp(opts, discovery, spec_files, base, config_overrides)
         end
       end
 
-      def run_sp(opts, discovery, spec_files, base, config_overrides)
-        puts "\n🎮 Singleplayer mode"
-
+      def resolve_versions(opts, config_overrides)
         config = Config.new(opts[:config])
         config_overrides.each { |k, v| config[k] = v }
         versions = config_overrides['game_version'] ? [config_overrides['game_version']] : Array(config['game_versions'])
-        versions = versions.map(&:to_s).uniq
+        versions.map(&:to_s).uniq
+      end
 
+      # Yields (version, overrides) and expects a harness. Single version: calls harness.run (exits).
+      # Multiple versions: runs harness.run_without_exit per version in parallel, merges and displays.
+      def run_with_versions(versions, base_overrides, opts, parallel_label:, &block)
         if versions.size <= 1
-          Harness.new(**base.merge(spec_files: spec_files || discovery.specs_for(:sp))).run
+          overrides = base_overrides.merge('game_version' => versions.first)
+          harness = yield(versions.first, overrides)
+          harness.run
           return
         end
 
-        puts "📦 Running specs on #{versions.size} versions in parallel: #{versions.join(', ')}"
-
+        puts "📦 Running #{parallel_label} on #{versions.size} versions in parallel: #{versions.join(', ')}"
         threads = versions.map do |version|
           Thread.new do
-            overrides = base[:config_overrides].merge('game_version' => version)
-            harness = Harness.new(**base.merge(spec_files: spec_files || discovery.specs_for(:sp), config_overrides: overrides))
+            overrides = base_overrides.merge('game_version' => version)
+            harness = yield(version, overrides)
             [version, harness.run_without_exit]
           end
         end
-
         version_results = threads.map(&:value)
         combined = merge_results(version_results)
         TestReporter.new(combined, verbosity: opts[:verbosity]).display
         exit(combined.failed? ? 1 : 0)
+      end
+
+      def run_sp(opts, discovery, spec_files, base, config_overrides)
+        puts "\n🎮 Singleplayer mode"
+        versions = resolve_versions(opts, config_overrides)
+        sp_specs = spec_files || discovery.specs_for(:sp)
+        run_with_versions(versions, config_overrides, opts, parallel_label: 'specs') do |_version, overrides|
+          Harness.new(**base.merge(spec_files: sp_specs, config_overrides: overrides))
+        end
+      end
+
+      def run_server_versions(discovery, spec_files, base, config_overrides, opts)
+        versions = resolve_versions(opts, config_overrides)
+        server_overrides = config_overrides.merge('server_mode' => true)
+        server_specs = spec_files || discovery.specs_for(:server)
+        run_with_versions(versions, server_overrides, opts, parallel_label: 'server specs') do |_version, overrides|
+          Harness.new(**base.merge(spec_files: server_specs, config_overrides: overrides))
+        end
+      end
+
+      def run_client_versions(discovery, spec_files, base, config_overrides, opts)
+        versions = resolve_versions(opts, config_overrides)
+        client_specs = spec_files || discovery.specs_for(:client)
+        run_with_versions(versions, config_overrides, opts, parallel_label: 'client specs') do |_version, overrides|
+          MPHarness.new(config_path: opts[:config], spec_files: client_specs, verbosity: opts[:verbosity], client_only: true, config_overrides: overrides)
+        end
       end
 
       def merge_results(version_results)

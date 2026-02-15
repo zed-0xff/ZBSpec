@@ -25,6 +25,13 @@ module ZBSpec
     end
 
     def run
+      results = run_without_exit
+      exit(results.failed? ? 1 : 0)
+    rescue StandardError => e
+      handle_error(e)
+    end
+
+    def run_without_exit
       print_startup_banner
       launch_instances_parallel
       wait_for_instances
@@ -172,12 +179,12 @@ module ZBSpec
         puts "\n⏭️  No client specs to run"
       end
 
-      # Report combined results
+      # Report combined results (caller may merge for multi-version)
       puts "\n" + '=' * 50
       reporter = TestReporter.new(results, verbosity: @verbosity)
       reporter.display
 
-      exit(results.failed? ? 1 : 0)
+      results
     ensure
       [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_PAUSE) }
     end
