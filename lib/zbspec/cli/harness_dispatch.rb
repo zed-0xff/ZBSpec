@@ -19,7 +19,7 @@ module ZBSpec
           run_both_phases(discovery, spec_files, base, opts)
         when :mp
           puts "\n🎮 Multiplayer mode: running specs on server and client"
-          MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: opts[:verbosity], config_overrides: config_overrides).run
+          run_mp_versions(discovery, spec_files, config_overrides, opts)
         when :server
           puts "\n🖥️  Server mode: running specs on dedicated server"
           run_server_versions(discovery, spec_files, base, config_overrides, opts)
@@ -85,6 +85,13 @@ module ZBSpec
         client_specs = spec_files || discovery.specs_for(:client)
         run_with_versions(versions, config_overrides, opts, parallel_label: 'client specs') do |_version, overrides|
           MPHarness.new(config_path: opts[:config], spec_files: client_specs, verbosity: opts[:verbosity], client_only: true, config_overrides: overrides)
+        end
+      end
+
+      def run_mp_versions(discovery, spec_files, config_overrides, opts)
+        versions = resolve_versions(opts, config_overrides)
+        run_with_versions(versions, config_overrides, opts, parallel_label: 'MP specs') do |_version, overrides|
+          MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: opts[:verbosity], config_overrides: overrides)
         end
       end
 
