@@ -15,3 +15,7 @@ Events.OnGameStart.Add(function()
     player:setInvincible(true)
 end)
 
+-- auto-respawn after death
+function ISPostDeathUI.OnPlayerDeath(playerObj)
+    CoopCharacterCreation:newPlayerMouse()
+end
