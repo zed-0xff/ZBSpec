@@ -70,11 +70,13 @@ module ZBSpec
         # Remember log position before test
         log_pos_before = log_file_size
         
-        # Use multipart format: ZBSpec.lua first, then spec_helper, then spec file (each with its own chunkname)
+        # Use multipart format: ZBSpec.lua first, then optional log_events, then spec_helper, then spec file (each with its own chunkname)
         # Format: ---FILE:filename---\ncontent\n---FILE:filename2---\ncontent2...
         zbspec_code = load_zbspec_lua
+        log_events_code = load_log_events
         lua_code = ''
         lua_code += "---FILE:ZBSpec.lua---\n#{zbspec_code}" unless zbspec_code.empty?
+        lua_code += "---FILE:lua/log_events.lua---\n#{log_events_code}" unless log_events_code.empty?
         lua_code += "---FILE:spec/spec_helper.lua---\n#{spec_helper_code}" unless spec_helper_code.empty?
         lua_code += "---FILE:#{spec_file}---\n#{File.read(spec_file)}"
         
@@ -205,6 +207,15 @@ module ZBSpec
       else
         ''
       end
+    end
+
+    # Load lua/log_events.lua when config log_events is true (preload before specs)
+    def load_log_events
+      return '' unless config['log_events']
+      path = File.join(ZBSpec.root, 'lua', 'log_events.lua')
+      return '' unless File.file?(path)
+      puts "📦 Preloading lua/log_events.lua" if verbosity >= 1
+      File.read(path) + "\n"
     end
 
     # Check if mod is loaded

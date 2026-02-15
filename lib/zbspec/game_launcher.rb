@@ -335,7 +335,7 @@ module ZBSpec
       name = game_version_name
       dir = File.join(base, name)
       unless File.directory?(dir)
-        warn "⚠️  Game config dir not found: #{dir} (game_version=#{name.inspect}), using default"
+        log "⚠️  Game config dir not found: #{dir} (game_version=#{name.inspect}), using default"
         dir = File.join(base, 'default')
         raise GameLaunchError, "Game config dir not found: #{dir}" unless File.directory?(dir)
       end
