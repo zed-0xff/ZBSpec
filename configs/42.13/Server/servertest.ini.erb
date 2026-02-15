@@ -65,16 +65,16 @@ SafetyDisconnectDelay=60
 SpawnItems=
 
 # Default starting port for player data. If UDP, this is this one of two ports used. Min: 0 Max: 65535 Default: 16261
-DefaultPort=16261
+DefaultPort=<%= game_port %>
 
 # Min: 0 Max: 65535 Default: 16262
-UDPPort=16262
+UDPPort=<%= game_port + 1 %>
 
 # Reset ID determines if the server has undergone a soft-reset. If this number does match the client, the client must create a new character. Used in conjunction with PlayerServerID. It is strongly advised that you backup these IDs somewhere Min: 0 Max: 2147483647 Default: 750606071
 ResetID=5348462
 
 # Enter the mod loading ID here. It can be found in \Steam\steamapps\workshop\modID\mods\modName\info.txt
-Mods=
+Mods=<%= mods.uniq.map{ |mod_id| "\\#{mod_id}" }.join(';') %>
 
 # Enter the foldername of the mod found in \Steam\steamapps\workshop\modID\mods\modName\media\maps\
 Map=Muldraugh, KY

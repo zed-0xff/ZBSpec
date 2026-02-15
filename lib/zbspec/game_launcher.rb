@@ -348,35 +348,24 @@ module ZBSpec
       # Copy ini and lua files from configs/<game_version>, preserving structure
       config_dir = game_config_dir
       mods = build_mod_list
+      game_port = rand(20000..50000)
+
       Dir[File.join(config_dir, '**/*.{ini,lua,txt,erb}')].each do |src|
         next unless File.file?(src)
+
         relative_path = src.sub("#{config_dir}/", '').sub(%r{\A/}, '')
         dest_path = File.join(cache_dir, relative_path)
         dest_path = dest_path.sub(/\.erb\z/, '') if relative_path.end_with?('.erb')
         FileUtils.mkdir_p(File.dirname(dest_path))
         if src.end_with?('.erb')
           template = ERB.new(File.read(src), trim_mode: '-')
-          File.write(dest_path, template.result_with_hash(mods: mods))
+          File.write(dest_path, template.result_with_hash(
+            game_port: game_port,
+            mods: mods,
+          ))
         else
           FileUtils.cp(src, dest_path)
         end
-      end
-      
-      # Update server ini with mods list and randomize port
-      server_ini = File.join(cache_dir, 'Server', 'servertest.ini')
-      if File.exist?(server_ini)
-        mods_str = build_mod_list.map{|m| "\\#{m}"}.join(';')
-        content = File.read(server_ini)
-        content.gsub!(/^Mods=.*$/, "Mods=#{mods_str}")
-        
-        # Randomize server port to avoid conflicts
-        game_port = rand(20000..50000)
-        content.gsub!(/^DefaultPort=.*$/, "DefaultPort=#{game_port}")
-        content.gsub!(/^UDPPort=.*$/, "UDPPort=#{game_port + 1}")
-        File.write(server_ini, content)
-        
-        # Write port to file so client can read it
-        File.write(File.join(cache_dir, 'game_port.txt'), game_port.to_s)
       end
 
       # Create symlinks for mods (no default "this" symlink; use mods: [{ id: "YourMod", path: "." }] to link CWD)
