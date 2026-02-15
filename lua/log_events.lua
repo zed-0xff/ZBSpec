@@ -1,4 +1,4 @@
--- curl -s -X POST http://127.0.0.1:4444/lua --data-binary '@eventlog_exclude_common.lua'
+-- curl -s -X POST http://127.0.0.1:4444/lua --data-binary '@log_events.lua'
 
 local events = {
     -- world
