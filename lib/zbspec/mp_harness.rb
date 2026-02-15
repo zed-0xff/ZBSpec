@@ -93,7 +93,7 @@ module ZBSpec
     end
 
     def game_version_name
-      GameLauncher.game_version_name(@config)
+      GameLauncher.game_version_name_from_config(@config)
     end
 
     def wait_for_instances

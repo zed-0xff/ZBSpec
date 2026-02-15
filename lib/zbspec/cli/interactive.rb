@@ -50,7 +50,8 @@ module ZBSpec
         path = opts[:script]
         abort "❌ Script file not found: #{path}" unless File.file?(path)
 
-        clients = Instances.discover_interactive_clients(:auto, verbosity: opts[:verbosity], game_version: opts[:game_version])
+        mode = opts[:mode] == :auto ? :auto : opts[:mode]
+        clients = Instances.discover_interactive_clients(mode, verbosity: opts[:verbosity], game_version: opts[:game_version])
         if clients.empty?
           abort "❌ No running instances found. Start a game first (e.g. zbspec --sp)."
         end

@@ -259,7 +259,11 @@ module ZBSpec
     end
 
     def javaagent_arg
-      agent_parts = ['experimental', 'lua_server_port=random']
+      agent_parts = [
+        'experimental',
+        'lua_server_port=random',
+        'expose_classes=me.zed_0xff.zombie_buddy.Accessor,me.zed_0xff.zombie_buddy.Exposer'
+      ]
       title = config['window_title']
       title = default_window_title if title.nil? || title.empty?
       if title && !title.empty?
@@ -315,11 +319,15 @@ module ZBSpec
       File.expand_path(config['game_versions_root'] || '~/projects/zomboid/versions')
     end
 
-    def game_version_name
-      name = config['game_version']
-      name ||= config['game_versions'].is_a?(Array) && config['game_versions'].first
-      name ||= config['game_versions'].is_a?(Hash) && config['game_versions'].keys.first
+    def self.game_version_name_from_config(cfg)
+      name = cfg['game_version']
+      name ||= cfg['game_versions'].is_a?(Array) && cfg['game_versions'].first
+      name ||= cfg['game_versions'].is_a?(Hash) && cfg['game_versions'].keys.first
       name&.to_s || 'default'
+    end
+
+    def game_version_name
+      self.class.game_version_name_from_config(config)
     end
 
     def game_config_dir

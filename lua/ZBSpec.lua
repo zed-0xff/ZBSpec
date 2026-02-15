@@ -300,13 +300,9 @@ setmetatable(ZBSpec.assert, {
     __call = function(_, condition, message) if not condition then fail(message) end end
 })
 
-ZBSpec.assert.are = {
-    equal = function(expected, actual)
-        if expected ~= actual then fail(string.format("expected %s, got %s", tostring(expected), tostring(actual))) end
-    end
-}
-ZBSpec.assert.is_equal = ZBSpec.assert.are.equal
-
+function ZBSpec.assert.eq(expected, actual)
+    if expected ~= actual then fail(string.format("expected %s, got %s", tostring(expected), tostring(actual))) end
+end
 function ZBSpec.assert.is_true(value, msg) if not value then fail(msg or "expected true, got false") end end
 function ZBSpec.assert.is_false(value, msg) if value then fail(msg or "expected false, got true") end end
 function ZBSpec.assert.is_nil(value) if value ~= nil then fail(string.format("expected nil, got %s", tostring(value))) end end
@@ -318,13 +314,14 @@ function ZBSpec.assert.is_table(v) assert_type(v, "table") end
 function ZBSpec.assert.is_function(v) assert_type(v, "function") end
 function ZBSpec.assert.is_boolean(v) assert_type(v, "boolean") end
 
-function ZBSpec.assert.greater_than(threshold, actual) if not (actual > threshold) then fail(string.format("expected %s > %s", tostring(actual), tostring(threshold))) end end
-function ZBSpec.assert.less_than(threshold, actual) if not (actual < threshold) then fail(string.format("expected %s < %s", tostring(actual), tostring(threshold))) end end
+function ZBSpec.assert.gt(actual, threshold) if not (actual > threshold) then fail(string.format("expected %s > %s", tostring(actual), tostring(threshold))) end end
+function ZBSpec.assert.lt(actual, threshold) if not (actual < threshold) then fail(string.format("expected %s < %s", tostring(actual), tostring(threshold))) end end
 
 function ZBSpec.assert.matches(pattern, str)
     assert_type(str, "string")
     if not string.match(str, pattern) then fail(string.format("'%s' does not match '%s'", str, pattern)) end
 end
+
 function ZBSpec.assert.contains(needle, haystack)
     if type(haystack) == "string" then
         if not string.find(haystack, needle, 1, true) then fail(string.format("'%s' does not contain '%s'", haystack, needle)) end
@@ -333,10 +330,12 @@ function ZBSpec.assert.contains(needle, haystack)
         fail(string.format("table does not contain %s", tostring(needle)))
     else fail(string.format("expected string or table, got %s", type(haystack))) end
 end
+
 function ZBSpec.assert.has_key(key, tbl)
     assert_type(tbl, "table")
     if tbl[key] == nil then fail(string.format("table does not have key '%s'", tostring(key))) end
 end
+
 function ZBSpec.assert.throws(fn, expected_msg)
     local ok, err = pcall(fn)
     if ok then fail("expected function to throw, but it did not") end
