@@ -12,8 +12,26 @@ local skipCurrentBlock = false
 local skipReason = nil
 local beforeEachStack = {}  -- Stack of before_each functions for nested describes
 local beforeAllStack = {}   -- Stack of before_all functions for nested describes
+local afterAllStack = {}    -- Stack of after_all functions for nested describes
+local describePathStack = {}  -- Path at each nesting level (for after_all per-level)
 described_class = nil       -- The class/table passed to describe(), if not a string
 
+-- Helpers (DRY)
+local function flatten_scopes(stack)
+    local out = {}
+    for _, scope in ipairs(stack) do
+        for _, hook in ipairs(scope) do table.insert(out, hook) end
+    end
+    return out
+end
+local function add_hook(stack, fn)
+    if #stack > 0 then table.insert(stack[#stack], fn) end
+end
+local function with_runner(runner)
+    return function(fn)
+        if runner then return runner(fn) else fn(); return true end
+    end
+end
 
 function ZBSpec.getContext()
     if isServer and isServer() then return "server"
@@ -36,16 +54,15 @@ function ZBSpec.describe(name, fn)
     -- Keep parent's described_class for nested string describes
     
     currentDescribe = currentDescribe ~= "" and (currentDescribe .. " " .. tostring(name)) or tostring(name)
-    
-    -- Push new scope for before_each and before_all
-    table.insert(beforeEachStack, {})
-    table.insert(beforeAllStack, {})
-    
+    table.insert(describePathStack, currentDescribe)
+    for _, st in ipairs({ beforeEachStack, beforeAllStack, afterAllStack }) do
+        table.insert(st, {})
+    end
     fn()
-    
-    -- Pop the scopes
-    table.remove(beforeEachStack)
-    table.remove(beforeAllStack)
+    for _, st in ipairs({ beforeEachStack, beforeAllStack, afterAllStack }) do
+        table.remove(st)
+    end
+    table.remove(describePathStack)
     
     currentDescribe = prevDescribe
     skipCurrentBlock = prevSkip
@@ -53,17 +70,9 @@ function ZBSpec.describe(name, fn)
     described_class = prevDescribedClass
 end
 
-function ZBSpec.before_each(fn)
-    if #beforeEachStack > 0 then
-        table.insert(beforeEachStack[#beforeEachStack], fn)
-    end
-end
-
-function ZBSpec.before_all(fn)
-    if #beforeAllStack > 0 then
-        table.insert(beforeAllStack[#beforeAllStack], fn)
-    end
-end
+function ZBSpec.before_each(fn) add_hook(beforeEachStack, fn) end
+function ZBSpec.before_all(fn) add_hook(beforeAllStack, fn) end
+function ZBSpec.after_all(fn) add_hook(afterAllStack, fn) end
 
 -- Async support (requires ?raw=1 on HTTP calls to allow yielding)
 local pendingJobs = {}
@@ -161,6 +170,12 @@ function ZBSpec.runDetailedAsync()
         end
     end
     
+    local afterOk, afterErr = ZBSpec.run_after_all_hooks(testList, run_with_yield)
+    if not afterOk then
+        results.failed = results.failed + 1
+        table.insert(results.errors, { name = "after_all", error = tostring(afterErr or "unknown") })
+    end
+    
     ZBSpec_currentTest = nil
     described_class = nil
     results.skipped = #skippedList
@@ -245,18 +260,13 @@ function ZBSpec.it(name, fn)
     if skipCurrentBlock then
         table.insert(skipped, { name = fullName, reason = skipReason })
     else
-        -- Capture all current before_each functions (flattened)
-        local beforeEachHooks = {}
-        for _, scope in ipairs(beforeEachStack) do
-            for _, hook in ipairs(scope) do
-                table.insert(beforeEachHooks, hook)
-            end
-        end
-        -- Capture all current before_all functions (flattened)
-        local beforeAllHooks = {}
-        for _, scope in ipairs(beforeAllStack) do
-            for _, hook in ipairs(scope) do
-                table.insert(beforeAllHooks, hook)
+        local beforeEachHooks = flatten_scopes(beforeEachStack)
+        local beforeAllHooks = flatten_scopes(beforeAllStack)
+        -- Capture after_all per describe level (path -> hooks) so we run each level once
+        local afterAllByPath = {}
+        for i, scope in ipairs(afterAllStack) do
+            if #scope > 0 and describePathStack[i] then
+                afterAllByPath[describePathStack[i]] = scope
             end
         end
         table.insert(tests, {
@@ -264,6 +274,7 @@ function ZBSpec.it(name, fn)
             fn = fn,
             before_each = beforeEachHooks,
             before_all = beforeAllHooks,
+            after_all_by_path = afterAllByPath,
             describe = currentDescribe,
             described_class = described_class
         })
@@ -349,9 +360,7 @@ ZBSpec_currentTest = nil
 
 -- Run before_all (once per describe) and before_each for test t; mutates ranBeforeAll. Optional runner(fn) returns ok, err (if absent, fn is called directly).
 function ZBSpec.run_before_hooks(t, ranBeforeAll, runner)
-    local function run(fn)
-        if runner then return runner(fn) else fn(); return true end
-    end
+    local run = with_runner(runner)
     if t.before_all and t.describe and not ranBeforeAll[t.describe] then
         ranBeforeAll[t.describe] = true
         for _, hook in ipairs(t.before_all) do
@@ -361,6 +370,41 @@ function ZBSpec.run_before_hooks(t, ranBeforeAll, runner)
     if t.before_each then
         for _, hook in ipairs(t.before_each) do
             local ok, err = run(hook); if not ok then return false, err end
+        end
+    end
+    return true
+end
+
+-- Run after_all hooks once per describe (innermost first). Call after all tests in testList. Optional runner(fn) returns ok, err.
+function ZBSpec.run_after_all_hooks(testList, runner)
+    local run = with_runner(runner)
+    -- Unique describe paths from any test's after_all_by_path, innermost first (longest path first)
+    local seen = {}
+    local describes = {}
+    for _, t in ipairs(testList) do
+        if t.after_all_by_path then
+            for path, _ in pairs(t.after_all_by_path) do
+                if path and path ~= "" and not seen[path] then
+                    seen[path] = true
+                    table.insert(describes, path)
+                end
+            end
+        end
+    end
+    table.sort(describes, function(a, b) return #a > #b end)
+    for _, path in ipairs(describes) do
+        local hooks = nil
+        for _, candidate in ipairs(testList) do
+            if candidate.after_all_by_path and candidate.after_all_by_path[path] then
+                hooks = candidate.after_all_by_path[path]
+                break
+            end
+        end
+        if hooks then
+            for _, hook in ipairs(hooks) do
+                local ok, err = run(hook)
+                if not ok then return false, err end
+            end
         end
     end
     return true
@@ -377,6 +421,7 @@ function ZBSpec.run()
         ZBSpec.run_before_hooks(t, ranBeforeAll, nil)
         t.fn()
     end
+    ZBSpec.run_after_all_hooks(testList, nil)
     ZBSpec_currentTest = nil
     described_class = nil
     return true
@@ -386,7 +431,8 @@ function ZBSpec.runDetailed()
     errors = {}
     local passed, failed = 0, 0
     local ranBeforeAll = {}
-    for _, t in ipairs(tests) do
+    local testList = tests
+    for _, t in ipairs(testList) do
         described_class = t.described_class
         ZBSpec_currentTest = t.name
         local ok, err = pcall(function()
@@ -396,6 +442,11 @@ function ZBSpec.runDetailed()
         if ok then passed = passed + 1
         else failed = failed + 1; table.insert(errors, { name = t.name, error = tostring(err) }) end
         ZBSpec_currentTest = nil
+    end
+    local afterOk, afterErr = ZBSpec.run_after_all_hooks(testList, nil)
+    if not afterOk then
+        failed = failed + 1
+        table.insert(errors, { name = "after_all", error = tostring(afterErr or "unknown") })
     end
     described_class = nil
     local result = { passed = passed, failed = failed, skipped = #skipped, context = ZBSpec.getContext(), errors = errors, skipped_tests = skipped }
@@ -413,6 +464,8 @@ function ZBSpec.reset()
     skipReason = nil
     beforeEachStack = {}
     beforeAllStack = {}
+    afterAllStack = {}
+    describePathStack = {}
 end
 
 ---------------------------------------------
@@ -500,20 +553,25 @@ end
 
 -- Global aliases for convenience
 describe = ZBSpec.describe
-context = ZBSpec.context
-it = ZBSpec.it
-test = ZBSpec.test
-assert = ZBSpec.assert
-pending = ZBSpec.pending
-before_all = ZBSpec.before_all
+context  = ZBSpec.context
+it       = ZBSpec.it
+test     = ZBSpec.test
+assert   = ZBSpec.assert
+pending  = ZBSpec.pending
+
+before_all  = ZBSpec.before_all
 before_each = ZBSpec.before_each
-wait_for = ZBSpec.wait_for
-wait_for_not = ZBSpec.wait_for_not
+after_all   = ZBSpec.after_all
+
+wait_for      = ZBSpec.wait_for
+wait_for_not  = ZBSpec.wait_for_not
 wait_for_this = ZBSpec.wait_for_this
+
 sleep = ZBSpec.sleep
+
 -- Remote execution
 server_exec = ZBSpec.server_exec
 server_eval = ZBSpec.server_eval
-all_exec = ZBSpec.all_exec
+all_exec    = ZBSpec.all_exec
 
 return ZBSpec
