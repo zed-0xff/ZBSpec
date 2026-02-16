@@ -1,7 +1,7 @@
 package me.zed_0xff.zbspec;
 
 /*
- * COMMENTED OUT - replaced by sendClientCommand/server_exec pattern in ZBSpec.lua
+ * COMMENTED OUT - replaced by sendClientCommand/server_exec pattern in zbspec.lua
  *
 
 import me.zed_0xff.zombie_buddy.Patch;

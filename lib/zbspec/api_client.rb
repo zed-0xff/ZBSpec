@@ -98,7 +98,7 @@ module ZBSpec
       true
     end
 
-    # Request header: ask ZombieBuddy to include this global's value in error response (errorGlobals). ZBSpec.lua sets ZBSpec_currentTest to the current test name before each test.
+    # Request header: ask ZombieBuddy to include this global's value in error response (errorGlobals). zbspec.lua sets ZBSpec_currentTest to the current test name before each test.
     ERROR_GLOBAL_HEADER = 'X-ZombieBuddy-Error-Globals'.freeze
     ERROR_GLOBAL_VALUE  = 'ZBSpec_currentTest'.freeze
 
@@ -256,9 +256,9 @@ module ZBSpec
       end
 
       # Parse stack trace like:
-      #  "function: greater_than -- file: ZBSpec.lua line # 210 | MOD: ZBSpec\n" +
+      #  "function: greater_than -- file: zbspec.lua line # 210 | MOD: ZBSpec\n" +
       #  "function: grants Science XP when reading science book -- file: ./spec/client/book_xp_spec.lua line # 51 | Vanilla\n" +
-      #  "function: run -- file: ZBSpec.lua line # 274 | MOD: ZBSpec"
+      #  "function: run -- file: zbspec.lua line # 274 | MOD: ZBSpec"
       def extract_location_from_lua_return(lr)
         text = [lr['kahluaErrors']].flatten.compact.join("\n")
         
@@ -269,7 +269,7 @@ module ZBSpec
         entries.each do |name, file, line|
           if file.end_with?('_spec.lua')
             spec_entries << { name: name, file: file, line: line.to_i }
-          elsif file.end_with?('ZBSpec.lua') && name != 'run'
+          elsif file.end_with?('zbspec.lua') && name != 'run'
             # This is the assertion function (e.g., greater_than, is_equal)
             @assertion_name ||= name
           end
