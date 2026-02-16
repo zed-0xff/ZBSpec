@@ -138,12 +138,14 @@ module ZBSpec
       lines = ["#!/bin/bash"]
       lines << "echo $$ > #{shell_quote(@pid_file)}" if @pid_file && !@pid_file.empty?
       lines << "cd #{shell_quote(@chdir)} || exit 1"
-      quoted_argv = @argv.map { |a| shell_quote(a) }.join(' ')
+      quoted = @argv.map { |a| shell_quote(a) }
+      exec_line = quoted.each_with_index.map do |arg, i|
+        i.zero? ? "exec #{arg}" : "  #{arg}"
+      end.join(" \\\n")
       if @log_file && !@log_file.empty?
-        lines << "exec #{quoted_argv} >& #{shell_quote(@log_file)}"
-      else
-        lines << "exec #{quoted_argv}"
+        exec_line += " \\\n  >& #{shell_quote(@log_file)}"
       end
+      lines << exec_line
       File.write(executable_path, lines.join("\n") + "\n")
       File.chmod(0o755, executable_path)
     end

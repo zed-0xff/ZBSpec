@@ -77,7 +77,8 @@ module ZBSpec
       else
         spawn_opts = { chdir: @mac_game_root }
         spawn_opts[:out] = spawn_opts[:err] = log_file if log_file
-        log "Launching with args: #{args.inspect}"
+        log format_argv_multiline(args) if @verbosity > 0
+        log "Launching with args: #{args.inspect}" if @verbosity <= 0
         @pid = spawn(*args, **spawn_opts)
       end
       @running = true
@@ -154,6 +155,13 @@ module ZBSpec
       File.join(cache_dir, 'std.log')
     end
 
+    # Format argv as readable multiline (one argument per line with \ continuation)
+    def format_argv_multiline(argv)
+      return '' unless argv.is_a?(Array) && argv.any?
+      quoted = argv.map { |a| "'#{a.to_s.gsub("'", "'\\\\''")}'" }
+      quoted.each_with_index.map { |arg, i| i.zero? ? "exec #{arg}" : "  #{arg}" }.join(" \\\n")
+    end
+
     def build_launch_args(log_file: nil)
       @mac_java_home, @mac_game_root = resolve_mac_paths if mac?
       game_exe = find_executable
@@ -170,6 +178,7 @@ module ZBSpec
       init_cachedir(cache_dir)
 
       argv = build_java_argv(java_bin, cache_dir)
+      log format_argv_multiline(argv) if @verbosity > 0
       app_display_name = config['window_title'].to_s.strip.empty? ? default_window_title : config['window_title']
       pid_file = File.join(cache_dir, 'pz.pid')
 
