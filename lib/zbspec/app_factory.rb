@@ -140,7 +140,7 @@ module ZBSpec
       lines << "cd #{shell_quote(@chdir)} || exit 1"
       quoted_argv = @argv.map { |a| shell_quote(a) }.join(' ')
       if @log_file && !@log_file.empty?
-        lines << "exec #{quoted_argv} >> #{shell_quote(@log_file)} 2>&1"
+        lines << "exec #{quoted_argv} >& #{shell_quote(@log_file)}"
       else
         lines << "exec #{quoted_argv}"
       end

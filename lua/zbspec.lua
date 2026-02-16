@@ -314,6 +314,49 @@ setmetatable(ZBSpec.assert, {
 function ZBSpec.assert.eq(expected, actual)
     if expected ~= actual then fail(string.format("expected %s, got %s", tostring(expected), tostring(actual))) end
 end
+
+local function deep_equal(a, b, seen)
+    seen = seen or {}
+    if a == b then return true end
+    if type(a) ~= type(b) then return false end
+    if type(a) ~= "table" then return false end
+    if seen[a] and seen[a] == b then return true end
+    seen[a] = b
+    for k, v in pairs(a) do
+        if not deep_equal(v, b[k], seen) then return false end
+    end
+    for k in pairs(b) do
+        if a[k] == nil then return false end
+    end
+    return true
+end
+
+local function repr(val, seen)
+    seen = seen or {}
+    if val == nil then return "nil" end
+    if type(val) == "boolean" then return val and "true" or "false" end
+    if type(val) == "number" then return tostring(val) end
+    if type(val) == "string" then return string.format("%q", val) end
+    if type(val) == "table" then
+        if seen[val] then return "{...}" end
+        seen[val] = true
+        local parts = {}
+        for k, v in pairs(val) do
+            local ks = type(k) == "string" and string.match(k, "^[%a_][%w_]*$") and k or ("[" .. repr(k, seen) .. "]")
+            table.insert(parts, ks .. " = " .. repr(v, seen))
+        end
+        table.sort(parts)
+        return "{" .. table.concat(parts, ", ") .. "}"
+    end
+    return tostring(val)
+end
+
+function ZBSpec.assert.same(expected, actual)
+    if not deep_equal(expected, actual) then
+        fail(string.format("expected same value (deep equal); expected: %s; actual: %s", repr(expected), repr(actual)))
+    end
+end
+
 function ZBSpec.assert.is_true(value, msg) if not value then fail(msg or "expected true, got false") end end
 function ZBSpec.assert.is_false(value, msg) if value then fail(msg or "expected false, got true") end end
 function ZBSpec.assert.is_nil(value) if value ~= nil then fail(string.format("expected nil, got %s", tostring(value))) end end

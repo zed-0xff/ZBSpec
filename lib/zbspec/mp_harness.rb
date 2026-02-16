@@ -143,7 +143,7 @@ module ZBSpec
     def run_specs
       results = TestResults.new
 
-      [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_UNPAUSE) }
+      [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_UNPAUSE) } if @config['unpause'] != false
 
       # Determine which specs to run where
       # If specific files provided, filter by folder; otherwise use discovery
@@ -186,7 +186,7 @@ module ZBSpec
 
       results
     ensure
-      [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_PAUSE) }
+      [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_PAUSE) } if @config['unpause'] != false
     end
 
     def extract_tests(results)

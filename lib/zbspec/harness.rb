@@ -99,13 +99,13 @@ module ZBSpec
 
     def run_specs_and_report
       puts "\n🧪 Running Specs" if verbosity > 0
-      api_client.execute(GAME_SPEED_UNPAUSE)
+      api_client.execute(GAME_SPEED_UNPAUSE) if config['unpause'] != false
       begin
         results = test_runner.run_all
         TestReporter.new(results, verbosity: verbosity).display
         results
       ensure
-        api_client.execute(GAME_SPEED_PAUSE)
+        api_client.execute(GAME_SPEED_PAUSE) if config['unpause'] != false
       end
     end
 
