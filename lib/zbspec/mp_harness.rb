@@ -158,35 +158,33 @@ module ZBSpec
       # Run specs on server (unless client_only mode)
       unless @client_only
         if server_specs.any?
-          puts "\n🧪 Running Server Specs (#{server_specs.length} files)"
-          puts '-' * 30
+          puts "\n🧪 Running Server Specs (#{server_specs.length} files)\n" + '-' * 30 if @verbosity >= 0
           server_runner = TestRunner.new(@server_api, server_config, spec_files: server_specs, verbosity: @verbosity)
           server_results = server_runner.run_all
           results.add_section('Server Specs', extract_tests(server_results))
         else
-          puts "\n⏭️  No server specs to run"
+          puts "\n⏭️  No server specs to run" if @verbosity >= 0
         end
       end
 
       # Run specs on client
       if client_specs.any?
-        puts "\n🧪 Running Client Specs (#{client_specs.length} files)"
-        puts '-' * 30
+        puts "\n🧪 Running Client Specs (#{client_specs.length} files)\n" + '-' * 30 if @verbosity >= 0
         client_runner = TestRunner.new(@client_api, client_config, spec_files: client_specs, verbosity: @verbosity)
         client_results = client_runner.run_all
         results.add_section('Client Specs', extract_tests(client_results))
       else
-        puts "\n⏭️  No client specs to run"
+        puts "\n⏭️  No client specs to run" if @verbosity >= 0
       end
 
       # Report combined results (caller may merge for multi-version)
-      puts "\n" + '=' * 50
+      puts "\n" + '=' * 50 if @verbosity >= 0
       reporter = TestReporter.new(results, verbosity: @verbosity)
       reporter.display
 
       results
     ensure
-      [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_PAUSE) } if @config['pause'] != false
+      [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_PAUSE) } if @config['unpause'] != false
     end
 
     def extract_tests(results)

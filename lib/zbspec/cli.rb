@@ -106,8 +106,14 @@ module ZBSpec
       discovery = SpecDiscovery.new
       opts[:mode] = discovery.recommended_mode if opts[:mode] == :auto
 
-      print_spec_summary(opts, discovery)
-      print_auto_mode(opts) if opts[:mode] != :stop
+      # Multiple versions => compact output only; suppress discovery/mode lines
+      versions = HarnessDispatch.resolve_versions(opts, config_overrides)
+      opts[:verbosity] = -1 if versions.size > 1
+
+      if opts[:verbosity] >= 0
+        print_spec_summary(opts, discovery)
+        print_auto_mode(opts) if opts[:mode] != :stop
+      end
 
       maybe_restart(opts)
       return StartOnly.run(opts, config_overrides) if opts[:start_only]

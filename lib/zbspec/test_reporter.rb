@@ -9,6 +9,7 @@ module ZBSpec
     YELLOW = "\e[33m"
     CYAN = "\e[36m"
     BOLD = "\e[1m"
+    COMPACT_NAME_WIDTH = 12  # "SP "/"MP " + version name
 
     attr_reader :results, :verbosity
 
@@ -18,14 +19,19 @@ module ZBSpec
     end
 
     def display
+      return if verbosity < 0  # multi-version: only merged compact view is shown
+
       puts "\n#{BOLD}#{CYAN}Spec Results#{RESET}"
       puts '=' * 50
 
+      multiple_instances = results.sections.size > 1
+      max_name_width = multiple_instances ? COMPACT_NAME_WIDTH : 0
+
       results.sections.each do |section_name, test_cases|
-        display_section(section_name, test_cases)
+        display_section(section_name, test_cases, compact: multiple_instances, max_name_width: max_name_width)
       end
 
-      display_summary
+      display_summary(multiple_instances: multiple_instances)
     end
 
     def display_json
@@ -34,8 +40,24 @@ module ZBSpec
 
     private
 
-    def display_section(name, test_cases)
-      puts "\n#{BOLD}#{name}:#{RESET}"
+    def section_display_name(name)
+      # Strip legacy "game_version " prefix; section names may be "SP 41", "MP 41"
+      name.to_s.sub(/\Agame_version\s+/i, '')
+    end
+
+    def display_section(name, test_cases, compact: false, max_name_width: 0)
+      passed_count = test_cases.count(&:passed?)
+      total_count = test_cases.size
+      all_passed = passed_count == total_count
+      display_name = section_display_name(name)
+
+      if compact && all_passed
+        padded = display_name.ljust(max_name_width)
+        puts "#{BOLD}#{padded}#{RESET} #{GREEN}#{passed_count}/#{total_count} passed#{RESET}"
+        return
+      end
+
+      puts "\n#{BOLD}#{display_name}:#{RESET}"
 
       test_cases.each do |test|
         puts "  #{test.status_color}#{test.status_icon}#{RESET} #{test.name}"
@@ -59,17 +81,16 @@ module ZBSpec
       end
     end
 
-    def display_summary
-      puts "\n#{'=' * 50}"
-      puts "#{BOLD}Summary:#{RESET}"
-      puts "  Total:  #{results.total_count}"
-      puts "  #{GREEN}Passed: #{results.passed_count}#{RESET}"
-      puts "  #{RED}Failed: #{results.failed_count}#{RESET}" if results.failed_count > 0
-
+    def display_summary(multiple_instances: false)
+      puts '' if multiple_instances
+      total = results.total_count
+      passed = results.passed_count
+      total_label = multiple_instances ? "TOTAL".ljust(COMPACT_NAME_WIDTH) : "TOTAL"
       if results.passed?
-        puts "\n#{GREEN}#{BOLD}✓ All tests passed!#{RESET}"
+        puts "#{BOLD}#{total_label}#{RESET} #{GREEN}#{passed}/#{total} passed#{RESET}"
       else
-        puts "\n#{RED}#{BOLD}✗ Some tests failed#{RESET}"
+        puts "#{BOLD}#{total_label}#{RESET} #{passed}/#{total} passed#{RED} (#{results.failed_count} failed)#{RESET}"
+        puts "#{RED}#{BOLD}✗ Some tests failed#{RESET}"
       end
     end
   end

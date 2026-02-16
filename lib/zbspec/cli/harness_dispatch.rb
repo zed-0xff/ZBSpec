@@ -39,27 +39,29 @@ module ZBSpec
         versions.map(&:to_s).uniq
       end
 
-      # Yields (version, overrides) and expects a harness. Single version: calls harness.run (exits).
-      # Multiple versions: runs harness.run_without_exit per version in parallel, merges and displays.
-      def run_with_versions(versions, base_overrides, opts, parallel_label:, &block)
+      # Yields (version, overrides, run_verbosity) and expects a harness.
+      # section_prefix: string "SP "/"MP " or proc(version) -> string for section name prefix.
+      def run_with_versions(versions, base_overrides, opts, parallel_label:, section_prefix: nil, &block)
         if versions.size <= 1
           overrides = base_overrides.merge('game_version' => versions.first)
-          harness = yield(versions.first, overrides)
+          run_verbosity = opts[:verbosity]
+          harness = yield(versions.first, overrides, run_verbosity)
           harness.run
           return
         end
 
         puts "📦 Running #{parallel_label} on #{versions.size} versions in parallel: #{versions.join(', ')}"
+        run_verbosity = -1  # only show merged compact view
         threads = versions.map do |version|
           Thread.new do
             overrides = base_overrides.merge('game_version' => version)
-            harness = yield(version, overrides)
+            harness = yield(version, overrides, run_verbosity)
             [version, harness.run_without_exit]
           end
         end
         version_results = threads.map(&:value)
-        combined = merge_results(version_results)
-        TestReporter.new(combined, verbosity: opts[:verbosity]).display
+        combined = merge_results(version_results, section_prefix: section_prefix)
+        TestReporter.new(combined, verbosity: 0).display  # compact only
         exit(combined.failed? ? 1 : 0)
       end
 
@@ -67,39 +69,62 @@ module ZBSpec
         puts "\n🎮 Singleplayer mode"
         versions = resolve_versions(opts, config_overrides)
         sp_specs = spec_files || discovery.specs_for(:sp)
-        run_with_versions(versions, config_overrides, opts, parallel_label: 'specs') do |_version, overrides|
-          Harness.new(**base.merge(spec_files: sp_specs, config_overrides: overrides))
+        run_with_versions(versions, config_overrides, opts, parallel_label: 'specs', section_prefix: 'SP ') do |_version, overrides, run_verbosity|
+          Harness.new(**base.merge(spec_files: sp_specs, config_overrides: overrides, verbosity: run_verbosity))
         end
       end
 
+      def versions_for_mp(versions)
+        versions.reject { |v| SP_ONLY_VERSIONS.include?(v.to_s) }
+      end
+
       def run_server_versions(discovery, spec_files, base, config_overrides, opts)
-        versions = resolve_versions(opts, config_overrides)
+        versions = versions_for_mp(resolve_versions(opts, config_overrides))
+        if versions.empty?
+          puts "No server versions to run (game_versions are SP-only: #{SP_ONLY_VERSIONS.join(', ')})"
+          return
+        end
         server_overrides = config_overrides.merge('server_mode' => true)
         server_specs = spec_files || discovery.specs_for(:server)
-        run_with_versions(versions, server_overrides, opts, parallel_label: 'server specs') do |_version, overrides|
-          Harness.new(**base.merge(spec_files: server_specs, config_overrides: overrides))
+        run_with_versions(versions, server_overrides, opts, parallel_label: 'server specs', section_prefix: 'MP ') do |_version, overrides, run_verbosity|
+          Harness.new(**base.merge(spec_files: server_specs, config_overrides: overrides, verbosity: run_verbosity))
         end
       end
 
       def run_client_versions(discovery, spec_files, base, config_overrides, opts)
-        versions = resolve_versions(opts, config_overrides)
+        versions = versions_for_mp(resolve_versions(opts, config_overrides))
+        if versions.empty?
+          puts "No client versions to run (game_versions are SP-only: #{SP_ONLY_VERSIONS.join(', ')})"
+          return
+        end
         client_specs = spec_files || discovery.specs_for(:client)
-        run_with_versions(versions, config_overrides, opts, parallel_label: 'client specs') do |_version, overrides|
-          MPHarness.new(config_path: opts[:config], spec_files: client_specs, verbosity: opts[:verbosity], client_only: true, config_overrides: overrides)
+        run_with_versions(versions, config_overrides, opts, parallel_label: 'client specs', section_prefix: 'MP ') do |_version, overrides, run_verbosity|
+          MPHarness.new(config_path: opts[:config], spec_files: client_specs, verbosity: run_verbosity, client_only: true, config_overrides: overrides)
         end
       end
 
       def run_mp_versions(discovery, spec_files, config_overrides, opts)
-        versions = resolve_versions(opts, config_overrides)
-        run_with_versions(versions, config_overrides, opts, parallel_label: 'MP specs') do |_version, overrides|
-          MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: opts[:verbosity], config_overrides: overrides)
+        versions = versions_for_mp(resolve_versions(opts, config_overrides))
+        if versions.empty?
+          puts "No MP versions to run (game_versions in config are SP-only: #{SP_ONLY_VERSIONS.join(', ')})"
+          return
+        end
+        run_with_versions(versions, config_overrides, opts, parallel_label: 'MP specs', section_prefix: 'MP ') do |_version, overrides, run_verbosity|
+          MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: run_verbosity, config_overrides: overrides)
         end
       end
 
-      def merge_results(version_results)
+      def merge_results(version_results, section_prefix: nil)
         combined = TestResults.new
         version_results.each do |version, results|
-          combined.add_section("game_version #{version}", results.all_tests)
+          name = if section_prefix.nil?
+            "game_version #{version}"
+          elsif section_prefix.respond_to?(:call)
+            "#{section_prefix.call(version)}#{version}"
+          else
+            "#{section_prefix}#{version}"
+          end
+          combined.add_section(name, results.all_tests)
         end
         combined
       end
@@ -124,21 +149,23 @@ module ZBSpec
         end
 
         puts "📦 Running SP + MP on #{versions.size} versions in parallel: #{versions.join(', ')}"
+        run_verbosity = -1  # only show merged compact view
         version_results = versions.map do |version|
           overrides = base[:config_overrides].merge('game_version' => version)
-          sp_harness = Harness.new(**base.merge(spec_files: sp_files, config_overrides: overrides))
+          sp_harness = Harness.new(**base.merge(spec_files: sp_files, config_overrides: overrides, verbosity: run_verbosity))
           sp_results = sp_harness.run_without_exit
-          combined = TestResults.new
-          combined.add_section('SP', sp_results.all_tests)
-          unless SP_ONLY_VERSIONS.include?(version.to_s)
-            mp_harness = MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: opts[:verbosity], config_overrides: overrides)
-            mp_results = mp_harness.run_without_exit
-            combined.add_section('MP', mp_results.all_tests)
+          mp_results = unless SP_ONLY_VERSIONS.include?(version.to_s)
+            mp_harness = MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: run_verbosity, config_overrides: overrides)
+            mp_harness.run_without_exit
           end
-          [version, combined]
+          [version, sp_results, mp_results]
         end
-        combined = merge_results(version_results)
-        TestReporter.new(combined, verbosity: opts[:verbosity]).display
+        combined = TestResults.new
+        version_results.each do |version, sp_res, mp_res|
+          combined.add_section("SP #{version}", sp_res.all_tests)
+          combined.add_section("MP #{version}", mp_res.all_tests) if mp_res
+        end
+        TestReporter.new(combined, verbosity: 0).display  # compact only
         exit(combined.failed? ? 1 : 0)
       end
     end
