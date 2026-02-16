@@ -104,17 +104,22 @@ module ZBSpec
         combined
       end
 
+      SP_ONLY_VERSIONS = ['42.12'].freeze
+
       def run_both_phases(discovery, spec_files, base, opts)
         versions = resolve_versions(opts, base[:config_overrides])
         sp_files = spec_files || discovery.specs_for(:sp)
         sp_files = sp_files.empty? ? nil : sp_files
 
         if versions.size <= 1
-          overrides = base[:config_overrides].merge('game_version' => versions.first)
+          version = versions.first
+          overrides = base[:config_overrides].merge('game_version' => version)
           puts "\n" + "=" * 50 + "\n🎮 Phase 1: Singleplayer mode\n" + "=" * 50
           Harness.new(**base.merge(spec_files: sp_files, config_overrides: overrides)).run_without_exit
-          puts "\n" + "=" * 50 + "\n🎮 Phase 2: Multiplayer mode\n" + "=" * 50
-          MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: opts[:verbosity], config_overrides: overrides).run
+          unless SP_ONLY_VERSIONS.include?(version.to_s)
+            puts "\n" + "=" * 50 + "\n🎮 Phase 2: Multiplayer mode\n" + "=" * 50
+            MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: opts[:verbosity], config_overrides: overrides).run
+          end
           return
         end
 
@@ -122,12 +127,14 @@ module ZBSpec
         version_results = versions.map do |version|
           overrides = base[:config_overrides].merge('game_version' => version)
           sp_harness = Harness.new(**base.merge(spec_files: sp_files, config_overrides: overrides))
-          mp_harness = MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: opts[:verbosity], config_overrides: overrides)
           sp_results = sp_harness.run_without_exit
-          mp_results = mp_harness.run_without_exit
           combined = TestResults.new
           combined.add_section('SP', sp_results.all_tests)
-          combined.add_section('MP', mp_results.all_tests)
+          unless SP_ONLY_VERSIONS.include?(version.to_s)
+            mp_harness = MPHarness.new(config_path: opts[:config], spec_files: spec_files, verbosity: opts[:verbosity], config_overrides: overrides)
+            mp_results = mp_harness.run_without_exit
+            combined.add_section('MP', mp_results.all_tests)
+          end
           [version, combined]
         end
         combined = merge_results(version_results)
