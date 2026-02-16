@@ -186,7 +186,7 @@ module ZBSpec
 
       results
     ensure
-      [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_PAUSE) } if @config['unpause'] != false
+      [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_PAUSE) } if @config['pause'] != false
     end
 
     def extract_tests(results)
