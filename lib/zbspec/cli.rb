@@ -43,6 +43,8 @@ module ZBSpec
         zbspec --restart-only     # Restart instances only (no tests)
         zbspec --init             # Create default config and stub spec
         zbspec -V 42.13           # Use game config from configs/42.13
+        zbspec --sp -1             # SP with first game_version only
+        zbspec --mp -1             # MP with first game_version only
         zbspec -i                 # Interactive console (all instances)
         zbspec -i --no-sandbox    # Interactive console without Lua sandbox
         zbspec -i --helper       # Interactive console and load spec/spec_helper.lua
@@ -55,7 +57,7 @@ module ZBSpec
         zbspec spec/my_spec.lua   # Run specific spec file
     HELP
 
-    DEFAULT_OPTIONS = {
+      DEFAULT_OPTIONS = {
       config: 'spec/zbspec.yml',
       mod_dir: nil,
       spec_files: [],
@@ -68,6 +70,7 @@ module ZBSpec
       restart: false,
       restart_only: false,
       game_version: nil,
+      first_version_only: false,
       start_only: false,
       init: false,
       version: false,
@@ -120,6 +123,7 @@ module ZBSpec
         opts.on('-m', '--mod-dir PATH', 'Path to mod directory') { |p| options[:mod_dir] = p }
         opts.on('-v', '--verbose', 'Increase verbosity (can be repeated: -vvv)') { options[:verbosity] += 1 }
         opts.on('-V', '--game-version VERSION', 'Use game config from configs/VERSION') { |v| options[:game_version] = v }
+        opts.on('-1', 'Run only first game_version from config') { options[:first_version_only] = true }
         opts.on('--sp', 'Singleplayer only') { options[:mode] = :sp }
         opts.on('--server', 'Server only') { options[:mode] = :server }
         opts.on('--client', 'Client only (auto-start server)') { options[:mode] = :client }

@@ -35,6 +35,7 @@ module ZBSpec
         config = Config.new(opts[:config])
         config_overrides.each { |k, v| config[k] = v }
         versions = config_overrides['game_version'] ? [config_overrides['game_version']] : Array(config['game_versions'])
+        versions = versions.first(1) if opts[:first_version_only]
         versions.map(&:to_s).uniq
       end
 
