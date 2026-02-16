@@ -38,16 +38,16 @@ zbsHook(MapSpawnSelect, {
         return false -- skip map selection
     end,
 
-    setVisible = function(orig, self, visible, ...)
-        print("[d] MapSpawnSelect:setVisible(", visible, ")")
-        if visible and not firstTimeTbl[self] then
-            firstTimeTbl[self] = true
-            orig(self, visible, ...)
-            self:onOptionMouseDown(self.nextButton)
-            return
-        end
-        orig(self, visible, ...)
-    end
+--    setVisible = function(orig, self, visible, ...)
+--        print("[d] MapSpawnSelect:setVisible(", visible, ")")
+--        if visible and not firstTimeTbl[self] then
+--            firstTimeTbl[self] = true
+--            orig(self, visible, ...)
+--            self:onOptionMouseDown(self.nextButton)
+--            return
+--        end
+--        orig(self, visible, ...)
+--    end
 })
 
 
