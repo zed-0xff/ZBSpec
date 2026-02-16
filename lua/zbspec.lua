@@ -128,6 +128,7 @@ function ZBSpec.runDetailedAsync()
         skipped = #skipped,
         context = ZBSpec.getContext(),
         errors = {},
+        passed_tests = {},
         skipped_tests = skipped
     }
     
@@ -164,6 +165,7 @@ function ZBSpec.runDetailedAsync()
         
         if testOk then
             results.passed = results.passed + 1
+            table.insert(results.passed_tests, t.name)
         else
             results.failed = results.failed + 1
             table.insert(results.errors, { name = t.name, error = tostring(testErr or "unknown") })
@@ -454,20 +456,7 @@ function ZBSpec.run_after_all_hooks(testList, runner)
 end
 
 function ZBSpec.run()
-    local testList = tests
-    tests = {}
-    skipped = {}
-    local ranBeforeAll = {}
-    for _, t in ipairs(testList) do
-        ZBSpec_currentTest = t.name
-        described_class = t.described_class
-        ZBSpec.run_before_hooks(t, ranBeforeAll, nil)
-        t.fn()
-    end
-    ZBSpec.run_after_all_hooks(testList, nil)
-    ZBSpec_currentTest = nil
-    described_class = nil
-    return true
+    return ZBSpec.runDetailed()
 end
 
 function ZBSpec.runDetailed()
@@ -492,7 +481,15 @@ function ZBSpec.runDetailed()
         table.insert(errors, { name = "after_all", error = tostring(afterErr or "unknown") })
     end
     described_class = nil
-    local result = { passed = passed, failed = failed, skipped = #skipped, context = ZBSpec.getContext(), errors = errors, skipped_tests = skipped }
+    local passed_tests = {}
+    for _, t in ipairs(testList) do
+        local ok = true
+        for _, e in ipairs(errors) do
+            if e.name == t.name then ok = false; break end
+        end
+        if ok then table.insert(passed_tests, t.name) end
+    end
+    local result = { passed = passed, failed = failed, skipped = #skipped, context = ZBSpec.getContext(), errors = errors, passed_tests = passed_tests, skipped_tests = skipped }
     tests = {}
     skipped = {}
     return result

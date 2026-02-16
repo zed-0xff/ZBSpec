@@ -131,18 +131,17 @@ module ZBSpec
       when Hash
         # Structured result from ZBSpec.runDetailed/runAsync
         if result['errors'] && result['errors'].is_a?(Array)
-          # Process errors
           result['errors'].each do |err|
             name = err['name'] || spec_file
             error_msg = err['error'] || 'Unknown error'
             tests << test(name, false, error: error_msg)
           end
         end
-        
-        # Count passed tests (if we have the count but not individual names)
-        passed_count = result['passed'].to_i
-        if passed_count > 0 && tests.empty?
-          # All tests passed
+
+        # Individual passed test names (so reporter can show each "it ..." with checkmark)
+        if result['passed_tests'].is_a?(Array) && result['passed_tests'].any?
+          result['passed_tests'].each { |name| tests << test(name, true) }
+        elsif result['passed'].to_i > 0 && tests.empty?
           tests << test(spec_file, true)
         elsif tests.empty? && result['failed'].to_i == 0
           tests << test(spec_file, true)

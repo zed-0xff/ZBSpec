@@ -51,9 +51,15 @@ module ZBSpec
       all_passed = passed_count == total_count
       display_name = section_display_name(name)
 
-      if compact && all_passed
+      # verbosity <= 0: one line per section, no individual tests; verbosity > 0: show each "it ..."
+      if verbosity <= 0
         padded = display_name.ljust(max_name_width)
-        puts "#{BOLD}#{padded}#{RESET} #{GREEN}#{passed_count}/#{total_count} passed#{RESET}"
+        if all_passed
+          puts "#{BOLD}#{padded}#{RESET} #{GREEN}#{passed_count}/#{total_count} passed#{RESET}"
+        else
+          failed = total_count - passed_count
+          puts "#{BOLD}#{padded}#{RESET} #{passed_count}/#{total_count} passed#{RED} (#{failed} failed)#{RESET}"
+        end
         return
       end
 

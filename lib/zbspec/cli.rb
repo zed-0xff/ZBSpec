@@ -127,7 +127,10 @@ module ZBSpec
         opts.banner = 'Usage: zbspec [options] [spec_files...]'
         opts.on('-c', '--config PATH', 'Path to config file (default: spec/zbspec.yml)') { |p| options[:config] = p }
         opts.on('-m', '--mod-dir PATH', 'Path to mod directory') { |p| options[:mod_dir] = p }
+
         opts.on('-v', '--verbose', 'Increase verbosity (can be repeated: -vvv)') { options[:verbosity] += 1 }
+        opts.on('-q', '--quiet', 'Decrease verbosity (can be repeated: -qqq)') { options[:verbosity] -= 1 }
+
         opts.on('-V', '--game-version VERSION', 'Use game config from configs/VERSION') { |v| options[:game_version] = v }
         opts.on('-1', 'Run only first game_version from config') { options[:first_version_only] = true }
         opts.on('--sp', 'Singleplayer only') { options[:mode] = :sp }
