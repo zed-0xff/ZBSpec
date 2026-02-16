@@ -26,26 +26,17 @@ module ZBSpec
       @pid_file ||= File.join(get_cache_dir, 'pz.pid')
     end
 
-    def game_port_file
-      File.join(get_cache_dir, 'game_port.txt')
-    end
-
-    def game_port
-      return nil unless File.exist?(game_port_file)
-      File.read(game_port_file).strip.to_i
-    end
-
-    # Read server's game port from standard location (for client to connect)
+    # Read server's game port from cache_server_<ver>/Server/servertest.ini (DefaultPort=...)
     def read_server_game_port
-      v = game_version_name
-      server_port_file = File.expand_path("./tmp/cache_server_#{v}/game_port.txt")
-      # Wait briefly for server to write port file (race condition with parallel launch)
+      ini_path = File.join(server_cache_dir_for_version(game_version_name), 'Server', 'servertest.ini')
       5.times do
-        break if File.exist?(server_port_file)
+        break if File.exist?(ini_path)
         sleep 0.2
       end
-      return nil unless File.exist?(server_port_file)
-      File.read(server_port_file).strip.to_i
+      return nil unless File.exist?(ini_path)
+      content = File.read(ini_path)
+      m = content.match(/DefaultPort=\s*(\d+)/)
+      m ? m[1].to_i : nil
     end
 
     def start
@@ -315,6 +306,10 @@ module ZBSpec
       end
     end
 
+    def server_cache_dir_for_version(version_name)
+      File.expand_path("./tmp/cache_server_#{version_name}")
+    end
+
     def game_versions_root
       File.expand_path(config['game_versions_root'] || '~/projects/zomboid/versions')
     end
@@ -345,13 +340,15 @@ module ZBSpec
     def init_cachedir(cache_dir)
       mods_dir = File.join(cache_dir, 'mods')
       FileUtils.mkdir_p(mods_dir)
+
       # Copy ini and lua files from configs/<game_version>, preserving structure
       config_dir = game_config_dir
-      mods = build_mod_list
-      game_port = rand(20000..50000)
+      mods       = build_mod_list
+      game_port  = config['server_mode'] ? rand(20000..50000) : nil
 
       Dir[File.join(config_dir, '**/*.{ini,lua,txt,erb}')].each do |src|
         next unless File.file?(src)
+        next if File.basename(File.dirname(src)).downcase == 'server' && !config['server_mode']
 
         relative_path = src.sub("#{config_dir}/", '').sub(%r{\A/}, '')
         dest_path = File.join(cache_dir, relative_path)
