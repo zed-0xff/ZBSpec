@@ -8,7 +8,7 @@ module ZBSpec
       def run
         created = []
         FileUtils.mkdir_p('spec/shared')
-        [['spec/zbspec.yml', config_yaml], ['spec/shared/example_spec.lua', stub_spec]].each do |path, content|
+        [['spec/zbspec.yml', config_yaml], ['spec/shared/core_spec.lua', stub_spec]].each do |path, content|
           if File.exist?(path)
             puts "  (existing) #{path}"
           else
@@ -16,6 +16,7 @@ module ZBSpec
             created << path
           end
         end
+        created << ensure_gitignore
         created << ensure_workshopignore
         created.compact!
 
@@ -24,7 +25,7 @@ module ZBSpec
           created.each { |p| puts "  #{p}" }
           puts "\nRun: zbspec"
         else
-          puts "✓ spec/zbspec.yml and spec/shared/example_spec.lua already exist."
+          puts "✓ spec/zbspec.yml and spec/shared/core_spec.lua already exist."
         end
       end
 
@@ -35,14 +36,26 @@ module ZBSpec
 
       def stub_spec
         <<~LUA
-          -- Stub spec (created by zbspec --init)
           describe("example", function()
               it("passes", function()
-                  assert.is_equal(4, 2 + 2)
+                  assert.eq(4, 2 + 2)
               end)
           end)
+
           return ZBSpec.run()
         LUA
+      end
+
+      def ensure_gitignore
+        path = '.gitignore'
+        entries = %w[tmp]
+        existing = File.exist?(path) ? File.read(path).lines.map { |l| l.sub(/\s*#.*/, '').strip }.reject(&:empty?) : []
+        to_append = entries.reject { |e| existing.include?(e) }
+        return nil if to_append.empty?
+        File.open(path, 'a') do |f|
+          to_append.each { |e| f.puts e }
+        end
+        path
       end
 
       def ensure_workshopignore
@@ -52,8 +65,6 @@ module ZBSpec
         to_append = entries.reject { |e| existing.include?(e) }
         return nil if to_append.empty?
         File.open(path, 'a') do |f|
-          f.puts '' if existing.any?
-          f.puts '# ZBSpec' if existing.empty?
           to_append.each { |e| f.puts e }
         end
         path
