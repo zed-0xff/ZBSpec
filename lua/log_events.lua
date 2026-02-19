@@ -62,6 +62,7 @@ local events = {
     "OnMouseDown",
     "OnMouseMove",
     "OnMouseUp",
+    "OnMouseWheel",
     "OnRightMouseDown",
     "OnRightMouseUp",
     "OnObjectLeftMouseButtonDown",
