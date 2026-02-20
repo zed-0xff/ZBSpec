@@ -1,0 +1,10 @@
+id: TestMap
+origin: [0, 0]
+default_floor: floors_interior_tilesandwood_01_28
+
+spawnpoints:
+  unemployed:
+    - [128, 128, 0]
+
+tiles:
+  floors_interior_tilesandwood_01_28:

@@ -22,14 +22,6 @@ zbsHook(ServerConnectPopup, {
     end
 })
 
--- select world
-require "OptionScreens/WorldSelect"
-zbsHook(WorldSelect, {
-    hasChoices = function()
-        return false -- skip world selection
-    end
-})
-
 -- select map
 require "OptionScreens/MapSpawnSelect"
 
@@ -37,19 +29,7 @@ zbsHook(MapSpawnSelect, {
     hasChoices = function()
         return false -- skip map selection
     end,
-
---    setVisible = function(orig, self, visible, ...)
---        print("[d] MapSpawnSelect:setVisible(", visible, ")")
---        if visible and not firstTimeTbl[self] then
---            firstTimeTbl[self] = true
---            orig(self, visible, ...)
---            self:onOptionMouseDown(self.nextButton)
---            return
---        end
---        orig(self, visible, ...)
---    end
 })
-
 
 -- perks/skills
 require "OptionScreens/CharacterCreationProfession"

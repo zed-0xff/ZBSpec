@@ -1,3 +1,5 @@
+require 'zbsHook'
+
 if debugScenarios == nil then
     debugScenarios = {}
 end
@@ -5,8 +7,8 @@ end
 debugScenarios.DebugScenarioZBSpec = {
     forceLaunch = true, -- also requires DebugScenario.ForceLaunch - see below
     name = "ZBSpec",
-    world = "Muldraugh, KY",
-    startLoc = {x=8496, y=5789, z=0}, -- also in servertest.ini
+    world = "TestMap",
+    startLoc = {x=128, y=128, z=0}, -- also in servertest.ini
     setSandbox = function()
         SandboxVars.VehicleEasyUse = true;
         SandboxVars.Zombies = 6;
@@ -20,3 +22,12 @@ debugScenarios.DebugScenarioZBSpec = {
         end
     end
 }
+
+-- select world
+--require "OptionScreens/WorldSelect"
+--zbsHook(WorldSelect, {
+--    hasChoices = function()
+--        return false -- skip world selection
+--    end
+--})
+

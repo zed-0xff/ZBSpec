@@ -1,5 +1,0 @@
-task :build do
-  sh "gradle build"
-end
-
-task :default => :build
