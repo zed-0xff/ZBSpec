@@ -164,7 +164,7 @@ module ZBSpec
         bg :black
         width 64
         height 64
-        text name.split.join("\n")
+        text name.split.join("\n"), y: 8
         save target
       end
     end
