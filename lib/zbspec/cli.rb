@@ -2,6 +2,7 @@
 
 require 'amazing_print'
 require 'optparse'
+require 'tempfile'
 
 require_relative 'cli/init'
 require_relative 'cli/instances'
@@ -52,6 +53,8 @@ module ZBSpec
         zbspec -i --script foo.lua  # Run script then interactive console
         zbspec --port 4444 --script foo.lua  # Send script to port only, then exit
         zbspec --script foo.lua   # Send script to all active instances
+        echo 'return 1+1' | zbspec --port 4444   # Run stdin script on port
+        echo 'return 1+1' | zbspec               # Run stdin script on all instances
         zbspec --client -i        # Interactive console (client only)
         zbspec --server -i        # Interactive console (server only)
         zbspec spec/my_spec.lua   # Run specific spec file
@@ -92,6 +95,7 @@ module ZBSpec
       return puts("ZBSpec v#{ZBSpec::VERSION}") if opts[:version]
       return print_help(opts) if opts[:help]
       return run_stop if opts[:mode] == :stop
+      return run_stdin_script(opts) if !$stdin.tty?
       return Interactive.run_interactive_port(opts) if opts[:interactive] && opts[:port]
       return Interactive.run_script_to_port(opts) if opts[:port] && opts[:script]
       return Interactive.run_script_all_instances(opts) if opts[:script] && !opts[:interactive]
@@ -199,6 +203,23 @@ module ZBSpec
       puts "🛑 Stopping all ZBSpec instances..."
       Instances.stop_instances(Instances.discover_cache_dirs(:auto))
       puts "✓ Done"
+    end
+
+    def run_stdin_script(opts)
+      script = $stdin.read
+      return if script.strip.empty?
+
+      f = Tempfile.create(['zbspec_stdin', '.lua'])
+      f.write(script)
+      f.close
+      at_exit { File.unlink(f.path) }
+      opts = opts.merge(script: f.path)
+
+      if opts[:port]
+        Interactive.run_script_to_port(opts)
+      else
+        Interactive.run_script_all_instances(opts)
+      end
     end
 
     def load_test_runner(opts)

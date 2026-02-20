@@ -69,6 +69,7 @@ module ZBSpec
         max_len = clients.keys.map(&:length).max || 0
         clients.each do |name, client|
           result = client.execute(code)
+          next if result.nil?
           puts multi ? "[#{name.ljust(max_len)}] #{result.inspect}" : result.inspect
         rescue APIClient::LuaError => e
           prefix = multi ? "[#{name.ljust(max_len)}] " : ""
