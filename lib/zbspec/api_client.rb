@@ -76,6 +76,29 @@ module ZBSpec
       false
     end
 
+    # Wait for Lua code to return truthy before proceeding (e.g. ready_condition from config).
+    # Code is executed as-is; supports multi-line blocks (local, return, etc.).
+    def wait_for_condition(lua_code, timeout: 120, process_pid: nil)
+      return if lua_code.to_s.strip.empty?
+
+      log "⏳ Waiting for ready_condition..."
+
+      Timeout.timeout(timeout) do
+        loop do
+          if process_pid && !process_alive?(process_pid)
+            raise APIError, "Process (PID #{process_pid}) terminated before ready_condition was satisfied"
+          end
+          result = execute(lua_code)
+          return true if result
+
+          print '.'
+          sleep 1
+        end
+      end
+    rescue Timeout::Error
+      raise APIError, "ready_condition not satisfied after #{timeout}s"
+    end
+
     # Returns false if process has exited. Works for both child processes (we spawned) and
     # reused PIDs from a previous run (not our child). For children we use wait(WNOHANG);
     # for non-children Process.wait raises ECHILD and we fall back to kill(0, pid).

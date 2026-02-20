@@ -35,6 +35,7 @@ module ZBSpec
       print_startup_banner
       launch_instances_parallel
       wait_for_instances
+      wait_for_ready_condition
       run_specs
     rescue StandardError => e
       handle_error(e)
@@ -135,6 +136,19 @@ module ZBSpec
       
       threads.each(&:join)
       raise client_error if client_error
+    end
+
+    def wait_for_ready_condition
+      expr = @config['ready_condition']
+      return if expr.to_s.strip.empty?
+
+      server_timeout = @config['server_startup_timeout'] || 60
+      client_timeout = @config['startup_timeout'] || 120
+      unless @client_only
+        @server_api.wait_for_condition(expr, timeout: server_timeout, process_pid: @server_launcher.pid)
+      end
+      @client_api.wait_for_condition(expr, timeout: client_timeout, process_pid: @client_launcher.pid)
+      puts "  ✓ ready_condition satisfied" if @verbosity > 0
     end
 
     GAME_SPEED_UNPAUSE = "if setGameSpeed then setGameSpeed(1) end".freeze

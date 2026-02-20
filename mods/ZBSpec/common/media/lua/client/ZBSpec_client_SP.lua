@@ -1,5 +1,3 @@
-require 'zbsHook'
-
 if debugScenarios == nil then
     debugScenarios = {}
 end
@@ -10,13 +8,15 @@ debugScenarios.DebugScenarioZBSpec = {
     world = "TestMap",
     startLoc = {x=128, y=128, z=0}, -- also in servertest.ini
     setSandbox = function()
-        SandboxVars.VehicleEasyUse = true;
-        SandboxVars.Zombies = 6;
+        SandboxVars.DayNightCycle = 2; -- endless day
+        SandboxVars.StartTime = 2;     -- 9:00 AM
+        SandboxVars.Zombies = 6;       -- no zombies
     end,
     onStart = function()
-        getDebugOptions():setBoolean("DebugScenario.ForceLaunch", false) -- disarm to allow exiting to main menu
         print("[d] DebugScenarioZBSpec:onStart")
+        getDebugOptions():setBoolean("DebugScenario.ForceLaunch", false) -- disarm to allow exiting to main menu
         UIManager.setShowLuaDebuggerOnError(false)
+
         if SurvivalGuideManager.instance then
             SurvivalGuideManager.instance.panel:setVisible(false)
         end

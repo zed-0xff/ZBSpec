@@ -24,7 +24,8 @@ module ZBSpec
       'debug' => true,
       'mods' => [],
       'spec_glob' => 'spec/**/*_spec.lua',
-      'sandbox' => true                 # Lua execution env: true = request-scoped env, false = global _G
+      'sandbox' => true,                # Lua execution env: true = request-scoped env, false = global _G
+      'ready_condition' => nil          # Lua expression to wait for before specs (e.g. "getPlayer() ~= nil")
     }.freeze
 
     attr_reader :data

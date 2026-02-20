@@ -100,10 +100,14 @@ module ZBSpec
 
       puts "\n🛑 Stopping game (PID: #{@pid})..."
       Process.kill('TERM', @pid)
-      Process.wait(@pid, Process::WNOHANG)
+      begin
+        Process.wait(@pid, Process::WNOHANG)
+      rescue Errno::ECHILD
+        # PID is not our child (e.g. reused from previous run)
+      end
       @running = false
       @pid = nil
-      
+
       # Remove PID file
       File.delete(pid_file) if File.exist?(pid_file)
     rescue Errno::ESRCH

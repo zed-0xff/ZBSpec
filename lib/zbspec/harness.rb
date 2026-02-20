@@ -32,6 +32,7 @@ module ZBSpec
       print_startup_banner
       boot_instance_api
       validate_instance_mode
+      wait_for_ready_condition
       results = run_specs_and_report
       launcher.stop if config['auto_shutdown']
       results
@@ -92,6 +93,14 @@ module ZBSpec
       end
       puts "✓ SP ready" if verbosity > 0
       api_client.wait_for_player(timeout: startup_timeout, process_pid: launcher.pid)
+    end
+
+    def wait_for_ready_condition
+      expr = config['ready_condition']
+      return if expr.to_s.strip.empty?
+
+      api_client.wait_for_condition(expr, timeout: startup_timeout, process_pid: launcher.pid)
+      puts "✓ ready_condition satisfied" if verbosity > 0
     end
 
     GAME_SPEED_UNPAUSE = "if setGameSpeed then setGameSpeed(1) end".freeze
