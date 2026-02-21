@@ -78,11 +78,26 @@ function ZBSpec.after_all(fn) add_hook(afterAllStack, fn) end
 -- Async support
 local pendingJobs = {}
 local jobCounter = 0
+local timeout_override_stack = {}
+
+local function get_effective_timeout(default)
+    if #timeout_override_stack > 0 then
+        return timeout_override_stack[#timeout_override_stack]
+    end
+    return default
+end
+
+function ZBSpec.timeout(seconds, fn, ...)
+    table.insert(timeout_override_stack, seconds)
+    local result = fn(...) -- no need to pcall here, if it errors then all further execution stops anyway
+    table.remove(timeout_override_stack)
+    return result
+end
 
 local function _wait_until(condition, invert, timeout_sec, ...)
     local args = { ... }
     local unpack = table.unpack or unpack
-    timeout_sec = timeout_sec or 10
+    timeout_sec = get_effective_timeout(timeout_sec or 10)
     local deadline = os.time() + timeout_sec
     while (condition(unpack(args)) == invert) do
         if os.time() >= deadline then
@@ -495,6 +510,7 @@ function ZBSpec._make_describe_env(parent_env, name)
         wait_for = ZBSpec.wait_for,
         wait_for_not = ZBSpec.wait_for_not,
         wait_for_this = ZBSpec.wait_for_this,
+        timeout = ZBSpec.timeout,
         sleep = ZBSpec.sleep,
         server_exec = ZBSpec.server_exec,
         server_eval = ZBSpec.server_eval,

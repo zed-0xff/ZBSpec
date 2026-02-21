@@ -149,7 +149,7 @@ module ZBSpec
       when true, 'true'
         tests << test(spec_file, true)
       when nil
-        # Empty or fully commented spec file: no describe/it, chunk returns nil → treat as 0 tests, pass
+        # Empty or fully commented spec file: chunk returns nil → treat as 0 tests, pass
         tests << test(spec_file, true)
       else
         tests << test(spec_file, false, error: result.to_s)
