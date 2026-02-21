@@ -114,7 +114,7 @@ module ZBSpec
         TestReporter.new(results, verbosity: verbosity).display
         results
       ensure
-        api_client.execute(GAME_SPEED_PAUSE) if config['unpause'] != false
+        api_client.execute(GAME_SPEED_PAUSE) if config['pause'] != false
       end
     end
 
