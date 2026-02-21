@@ -1,4 +1,4 @@
-# ZBSpec configuration (created by zbspec --init)
+# see https://github.com/zed-0xff/zbspec
 
 unpause: false
 auto_shutdown: false
