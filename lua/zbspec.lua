@@ -434,7 +434,7 @@ local evalResults = {}
 local evalIdCounter = 0
 function ZBSpec.server_exec(code)
     if not (isClient and isClient()) then
-        local fn, err = loadstring(code)
+        local fn, err = loadstring(code, "=(ZBSpec.server_exec)")
         if fn then fn() else error("server_exec compile error: " .. tostring(err)) end
         return
     end
@@ -442,7 +442,7 @@ function ZBSpec.server_exec(code)
 end
 function ZBSpec.server_eval(code)
     if not (isClient and isClient()) then
-        local fn, err = loadstring(code)
+        local fn, err = loadstring(code, "=(ZBSpec.server_eval)")
         if fn then return fn() else error("server_eval compile error: " .. tostring(err)) end
     end
     evalIdCounter = evalIdCounter + 1
@@ -455,7 +455,7 @@ function ZBSpec.server_eval(code)
     else error("server_eval error: " .. tostring(result.error)) end
 end
 function ZBSpec.all_exec(code)
-    local fn, err = loadstring(code)
+    local fn, err = loadstring(code, "=(ZBSpec.all_exec)")
     if fn then fn() else error("all_exec compile error: " .. tostring(err)) end
     if isClient and isClient() then sendClientCommand(MODULE_NAME, "exec", { code = code }) end
 end

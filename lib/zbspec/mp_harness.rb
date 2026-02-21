@@ -151,7 +151,7 @@ module ZBSpec
       puts "  ✓ ready_condition satisfied" if @verbosity > 0
     end
 
-    GAME_SPEED_UNPAUSE = "if setGameSpeed then setGameSpeed(1) end".freeze
+    GAME_SPEED_UNPAUSE = "if getGameSpeed and getGameSpeed() == 0 and setGameSpeed then setGameSpeed(1) end".freeze
     GAME_SPEED_PAUSE   = "if setGameSpeed then setGameSpeed(0) end".freeze
 
     def run_specs
