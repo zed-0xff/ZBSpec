@@ -19,6 +19,13 @@ module ZBSpec
   def self.root
     File.expand_path('..', __dir__)
   end
+
+  RESET = "\e[0m"
+  GREEN = "\e[32m"
+  RED = "\e[31m"
+  YELLOW = "\e[33m"
+  CYAN = "\e[36m"
+  BOLD = "\e[1m"
 end
 
 # Load all components

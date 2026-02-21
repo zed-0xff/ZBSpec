@@ -3,12 +3,6 @@
 module ZBSpec
   # Formats and displays test results
   class TestReporter
-    RESET = "\e[0m"
-    GREEN = "\e[32m"
-    RED = "\e[31m"
-    YELLOW = "\e[33m"
-    CYAN = "\e[36m"
-    BOLD = "\e[1m"
     COMPACT_NAME_WIDTH = 12  # "SP "/"MP " + version name
 
     attr_reader :results, :verbosity

@@ -80,7 +80,10 @@ module ZBSpec
         lua_code += "---FILE:lua/log_events.lua---\n#{log_events_code}" unless log_events_code.empty?
         lua_code += "---FILE:lua/log_packets.lua---\n#{log_packets_code}" unless log_packets_code.empty?
         lua_code += "---FILE:spec/spec_helper.lua---\n#{spec_helper_code}" unless spec_helper_code.empty?
-        lua_code += "---FILE:#{spec_file}---\n#{File.read(spec_file)}"
+        spec_content = File.read(spec_file)
+        warn_missing_run(spec_file) unless has_run_call?(spec_content)
+
+        lua_code += "---FILE:#{spec_file}---\n#{spec_content}"
         
         begin
           # Execute the spec file in the game with async support
@@ -198,6 +201,15 @@ module ZBSpec
       path = File.join(ZBSpec.root, 'lua', 'zbspec.lua')
       return '' unless File.file?(path)
       File.read(path) + "\n"
+    end
+
+    # Check if spec file contains ZBSpec.run or ZBSpec.runAsync
+    def has_run_call?(content)
+      content =~ /^\s*return ZBSpec\.run(Async)?\(/
+    end
+
+    def warn_missing_run(spec_file)
+      puts "#{RED}⚠️  #{spec_file}: spec file should end with 'return ZBSpec.runAsync()' or 'return ZBSpec.run()'#{RESET}"
     end
 
     # Load spec_helper.lua if it exists
