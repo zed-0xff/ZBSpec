@@ -418,10 +418,12 @@ function ZBSpec.runDetailed()
     local testList = tests
     for _, t in ipairs(testList) do
         ZBSpec_currentTest = t.name
-        local ok, err = pcall(function()
+        -- local ok, err = pcall(function()
+        local ok = true
+        local err = nil
             ZBSpec.run_before_hooks(t, ranBeforeAll, nil)
             t.fn()
-        end)
+        -- end)
         local afterOk, afterErr = ZBSpec.run_after_each_hooks(t, nil)
         if not afterOk then ok, err = false, afterErr end
         if ok then passed = passed + 1
