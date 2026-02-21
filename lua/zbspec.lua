@@ -89,11 +89,10 @@ local function get_effective_timeout(default)
     return default
 end
 
-function ZBSpec.timeout(seconds, fn)
+function ZBSpec.timeout(seconds, fn, ...)
     table.insert(timeout_override_stack, seconds)
-    local ok, result = pcall(fn)
+    local result = fn(...) -- no need to pcall here, if it errors then all further execution stops anyway
     table.remove(timeout_override_stack)
-    if not ok then error(result) end
     return result
 end
 
