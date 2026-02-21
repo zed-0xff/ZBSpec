@@ -12,6 +12,7 @@ local skipCurrentBlock = false
 local skipReason = nil
 local beforeEachStack = {}
 local beforeAllStack = {}
+local afterEachStack = {}
 local afterAllStack = {}
 local describePathStack = {}
 local current_described_class = nil  -- set during _describe so it() can store it on test
@@ -55,11 +56,11 @@ function ZBSpec._describe(name, fn)
 
     currentDescribe = currentDescribe ~= "" and (currentDescribe .. " " .. tostring(name)) or tostring(name)
     table.insert(describePathStack, currentDescribe)
-    for _, st in ipairs({ beforeEachStack, beforeAllStack, afterAllStack }) do
+    for _, st in ipairs({ beforeEachStack, beforeAllStack, afterEachStack, afterAllStack }) do
         table.insert(st, {})
     end
     fn()
-    for _, st in ipairs({ beforeEachStack, beforeAllStack, afterAllStack }) do
+    for _, st in ipairs({ beforeEachStack, beforeAllStack, afterEachStack, afterAllStack }) do
         table.remove(st)
     end
     table.remove(describePathStack)
@@ -73,6 +74,7 @@ end
 -- Hooks (called from env inside describe)
 function ZBSpec.before_each(fn) add_hook(beforeEachStack, fn) end
 function ZBSpec.before_all(fn) add_hook(beforeAllStack, fn) end
+function ZBSpec.after_each(fn) add_hook(afterEachStack, fn) end
 function ZBSpec.after_all(fn) add_hook(afterAllStack, fn) end
 
 -- Async support
@@ -87,10 +89,11 @@ local function get_effective_timeout(default)
     return default
 end
 
-function ZBSpec.timeout(seconds, fn, ...)
+function ZBSpec.timeout(seconds, fn)
     table.insert(timeout_override_stack, seconds)
-    local result = fn(...) -- no need to pcall here, if it errors then all further execution stops anyway
+    local ok, result = pcall(fn)
     table.remove(timeout_override_stack)
+    if not ok then error(result) end
     return result
 end
 
@@ -156,6 +159,8 @@ function ZBSpec.runDetailedAsync()
         ZBSpec_currentTest = t.name
         local testOk, testErr = ZBSpec.run_before_hooks(t, ranBeforeAll, run_with_yield)
         if testOk then testOk, testErr = run_with_yield(t.fn) end
+        local afterOk, afterErr = ZBSpec.run_after_each_hooks(t, run_with_yield)
+        if not afterOk then testOk, testErr = false, afterErr end
         if testOk then
             results.passed = results.passed + 1
             table.insert(results.passed_tests, t.name)
@@ -225,6 +230,7 @@ function ZBSpec.it(name, fn)
     else
         local beforeEachHooks = flatten_scopes(beforeEachStack)
         local beforeAllHooks = flatten_scopes(beforeAllStack)
+        local afterEachHooks = flatten_scopes(afterEachStack)
         local afterAllByPath = {}
         for i, scope in ipairs(afterAllStack) do
             if #scope > 0 and describePathStack[i] then
@@ -236,6 +242,7 @@ function ZBSpec.it(name, fn)
             fn = fn,
             before_each = beforeEachHooks,
             before_all = beforeAllHooks,
+            after_each = afterEachHooks,
             after_all_by_path = afterAllByPath,
             describe = currentDescribe,
             described_class = current_described_class
@@ -362,6 +369,16 @@ function ZBSpec.run_before_hooks(t, ranBeforeAll, runner)
     return true
 end
 
+function ZBSpec.run_after_each_hooks(t, runner)
+    if not t.after_each or #t.after_each == 0 then return true end
+    local run = with_runner(runner)
+    for _, hook in ipairs(t.after_each) do
+        local ok, err = run(hook)
+        if not ok then return false, err end
+    end
+    return true
+end
+
 function ZBSpec.run_after_all_hooks(testList, runner)
     local run = with_runner(runner)
     local seen = {}
@@ -406,6 +423,8 @@ function ZBSpec.runDetailed()
             ZBSpec.run_before_hooks(t, ranBeforeAll, nil)
             t.fn()
         end)
+        local afterOk, afterErr = ZBSpec.run_after_each_hooks(t, nil)
+        if not afterOk then ok, err = false, afterErr end
         if ok then passed = passed + 1
         else failed = failed + 1; table.insert(errors, { name = t.name, error = tostring(err) }) end
         ZBSpec_currentTest = nil
@@ -439,6 +458,7 @@ function ZBSpec.reset()
     current_described_class = nil
     beforeEachStack = {}
     beforeAllStack = {}
+    afterEachStack = {}
     afterAllStack = {}
     describePathStack = {}
 end
@@ -503,6 +523,7 @@ function ZBSpec._make_describe_env(parent_env, name)
         assert = ZBSpec.assert,
         before_each = ZBSpec.before_each,
         before_all = ZBSpec.before_all,
+        after_each = ZBSpec.after_each,
         after_all = ZBSpec.after_all,
         skip = ZBSpec.skip,
         pending = ZBSpec.pending,
