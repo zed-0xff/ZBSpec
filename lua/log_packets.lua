@@ -5,6 +5,9 @@ local packets = {
     "AddBloodPacket",
 
     "GlobalObjectsPacket",
+    "ScoreboardUpdatePacket",
+    "StatePacket",
+    "RequestZipListPacket",
 
     "PlayerDamagePacket",
     "PlayerEffectsPacket",
@@ -17,6 +20,7 @@ local packets = {
     "PlaySoundPacket",
     "StopSoundPacket",
 
+    "ItemStatsPacket",
     "RecipePacket",
     "StatisticsPacket",
     "SyncClockPacket",
