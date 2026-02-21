@@ -32,7 +32,6 @@ module ZBSpec
       print_startup_banner
       boot_instance_api
       validate_instance_mode
-      wait_for_ready_condition
       results = run_specs_and_report
       launcher.stop if config['auto_shutdown']
       results
@@ -107,8 +106,9 @@ module ZBSpec
     GAME_SPEED_PAUSE   = "if setGameSpeed then setGameSpeed(0) end".freeze
 
     def run_specs_and_report
-      puts "\n🧪 Running Specs" if verbosity > 0
       api_client.execute(GAME_SPEED_UNPAUSE) if config['unpause'] != false
+      wait_for_ready_condition
+      puts "\n🧪 Running Specs" if verbosity > 0
       begin
         results = test_runner.run_all
         TestReporter.new(results, verbosity: verbosity).display

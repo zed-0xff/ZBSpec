@@ -35,7 +35,6 @@ module ZBSpec
       print_startup_banner
       launch_instances_parallel
       wait_for_instances
-      wait_for_ready_condition
       run_specs
     rescue StandardError => e
       handle_error(e)
@@ -158,6 +157,7 @@ module ZBSpec
       results = TestResults.new
 
       [@server_api, @client_api].each { |api| api.execute(GAME_SPEED_UNPAUSE) } if @config['unpause'] != false
+      wait_for_ready_condition
 
       # Determine which specs to run where
       # If specific files provided, filter by folder; otherwise use discovery
