@@ -22,9 +22,11 @@ public class Patch_GameLoadingState {
         
         @Patch.OnEnter
         public static void enter(@Patch.This Object self) {
+            boolean success = Accessor.trySet(self, f_forceDone, true);
+
             if (!msgShown) {
                 msgShown = true;
-                if (Accessor.trySet(self, f_forceDone, true)) {
+                if (success) {
                     System.out.println("[ZBSpec] GameLoadingState.update() - forceDone set to true");
                 } else {
                     System.err.println("[ZBSpec] ERROR: Failed to set forceDone field in GameLoadingState");
