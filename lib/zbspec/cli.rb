@@ -98,7 +98,6 @@ module ZBSpec
       return run_stdin_script(opts) if !$stdin.tty?
       return Interactive.run_interactive_port(opts) if opts[:interactive] && opts[:port]
       return Interactive.run_script_to_port(opts) if opts[:port] && opts[:script]
-      return Interactive.run_script_all_instances(opts) if opts[:script] && !opts[:interactive]
 
       abort config_not_found_message(opts[:config]) unless File.exist?(opts[:config])
 
@@ -121,6 +120,10 @@ module ZBSpec
 
       maybe_restart(opts)
       return StartOnly.run(opts, config_overrides) if opts[:start_only]
+      if opts[:script]
+        StartOnly.run(opts, config_overrides) if opts[:restart] || Instances.discover_interactive_clients(opts[:mode], verbosity: opts[:verbosity], game_version: opts[:game_version]).empty?
+        return Interactive.run_script_all_instances(opts.merge(restart: false))
+      end
 
       HarnessDispatch.run(opts, discovery, test_runner, config_overrides)
     end

@@ -6,6 +6,11 @@ module ZBSpec
       module_function
 
       def run_interactive_port(opts)
+        if opts[:restart]
+          puts "🔄 Restarting instances..."
+          Instances.stop_instances(Instances.discover_cache_dirs(:auto))
+          puts "✓ Done"
+        end
         port, client = connect_port_client(opts)
         puts "🔧 Interactive Lua Console (port #{port})\n" + "=" * 50
         puts "  ✓ Connected to port #{port}"
@@ -19,6 +24,11 @@ module ZBSpec
       end
 
       def run_script_to_port(opts)
+        if opts[:restart]
+          puts "🔄 Restarting instances..."
+          Instances.stop_instances(Instances.discover_cache_dirs(:auto))
+          puts "✓ Done"
+        end
         port, client = connect_port_client(opts)
         abort "❌ Script file not found: #{opts[:script]}" unless File.file?(opts[:script])
 
@@ -49,6 +59,12 @@ module ZBSpec
       def run_script_all_instances(opts)
         path = opts[:script]
         abort "❌ Script file not found: #{path}" unless File.file?(path)
+
+        if opts[:restart]
+          puts "🔄 Restarting instances..."
+          Instances.stop_instances(Instances.discover_cache_dirs(:auto))
+          puts "✓ Done"
+        end
 
         mode = opts[:mode] == :auto ? :auto : opts[:mode]
         clients = Instances.discover_interactive_clients(mode, verbosity: opts[:verbosity], game_version: opts[:game_version])
