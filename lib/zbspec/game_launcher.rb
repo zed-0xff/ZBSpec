@@ -350,6 +350,30 @@ module ZBSpec
       dir
     end
 
+    def game_port_file(cache_dir)
+      File.join(cache_dir, '.game_port')
+    end
+
+    def read_persisted_game_port(cache_dir)
+      path = game_port_file(cache_dir)
+      return nil unless File.exist?(path)
+      port = File.read(path).strip.to_i
+      (20000..50000).cover?(port) ? port : nil
+    end
+
+    def write_game_port(cache_dir, port)
+      File.write(game_port_file(cache_dir), port.to_s)
+    end
+
+    def resolve_game_port(cache_dir)
+      port = read_persisted_game_port(cache_dir)
+      if port.nil?
+        port = rand(20000..50000)
+        write_game_port(cache_dir, port)
+      end
+      port
+    end
+
     def init_cachedir(cache_dir)
       mods_dir = File.join(cache_dir, 'mods')
       FileUtils.mkdir_p(mods_dir)
@@ -357,7 +381,7 @@ module ZBSpec
       # Copy ini and lua files from configs/<game_version>, preserving structure
       config_dir = game_config_dir
       mods       = build_mod_list
-      game_port  = config['server_mode'] ? rand(20000..50000) : nil
+      game_port  = config['server_mode'] ? resolve_game_port(cache_dir) : nil
 
       Dir[File.join(config_dir, '**/*.{ini,lua,txt,erb}')].each do |src|
         next unless File.file?(src)
