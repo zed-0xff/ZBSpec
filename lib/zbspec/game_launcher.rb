@@ -227,14 +227,13 @@ module ZBSpec
         argv << server_name << '-nosteam' << '-adminpassword' << (config['admin_password'] || 'zbspec')
       else
         argv.concat(['-novoip', '-nosound', '-nosteam', '-no-worldgen', '-no-foraging', '-no-attachments'])
+        argv << '-debug' unless config['debug'] == false
         if config['server_ip']
           ip = config['server_ip']
           port = config['server_port'] || read_server_game_port || 16261
           password = config['password'] || ''
           argv << '+connect' << "#{ip}:#{port}"
           argv << '+password' << password unless password.empty?
-        else
-          argv << '-debug' if config['debug']
         end
       end
       argv
@@ -251,12 +250,11 @@ module ZBSpec
         args << (config['server_name'] || 'ZBSpecServer') << '-nosteam' << '-adminpassword' << (config['admin_password'] || 'zbspec')
       else
         args.concat(['-novoip', '-nosound', '-nosteam', '-no-worldgen', '-no-foraging', '-no-attachments'])
+        args << '-debug' unless config['debug'] == false
         if config['server_ip']
           ip, port = config['server_ip'], config['server_port'] || read_server_game_port || 16261
           args << '+connect' << "#{ip}:#{port}"
           args << '+password' << (config['password'] || '') unless (config['password'] || '').empty?
-        else
-          args << '-debug' if config['debug']
         end
       end
       args

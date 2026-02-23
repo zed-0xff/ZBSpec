@@ -70,15 +70,14 @@ module ZBSpec
         # Remember log position before test
         log_pos_before = log_file_size
         
-        # Use multipart format: zbspec.lua first, then optional log_events/log_packets, then spec_helper, then spec file (each with its own chunkname)
+        # Use multipart format: zbspec.lua first, then helpers (from config), then spec_helper, then spec file (each with its own chunkname)
         # Format: ---FILE:filename---\ncontent\n---FILE:filename2---\ncontent2...
         zbspec_code = load_zbspec_lua
-        log_events_code = load_log_events
-        log_packets_code = load_log_packets
         lua_code = ''
         lua_code += "---FILE:zbspec.lua---\n#{zbspec_code}" unless zbspec_code.empty?
-        lua_code += "---FILE:lua/log_events.lua---\n#{log_events_code}" unless log_events_code.empty?
-        lua_code += "---FILE:lua/log_packets.lua---\n#{log_packets_code}" unless log_packets_code.empty?
+        load_helpers_list.each do |name, content|
+          lua_code += "---FILE:lua/#{name}.lua---\n#{content}" unless content.empty?
+        end
         lua_code += "---FILE:spec/spec_helper.lua---\n#{spec_helper_code}" unless spec_helper_code.empty?
         spec_content = File.read(spec_file)
         warn_missing_run(spec_file) unless has_run_call?(spec_content)
@@ -223,22 +222,17 @@ module ZBSpec
       end
     end
 
-    # Load lua/log_events.lua when config log_events is true (preload before specs)
-    def load_log_events
-      return '' unless config['log_events']
-      path = File.join(ZBSpec.root, 'lua', 'log_events.lua')
-      return '' unless File.file?(path)
-      puts "📦 Preloading lua/log_events.lua" if verbosity >= 1
-      File.read(path) + "\n"
-    end
-
-    # Load lua/log_packets.lua when config log_packets is true (preload before specs)
-    def load_log_packets
-      return '' unless config['log_packets']
-      path = File.join(ZBSpec.root, 'lua', 'log_packets.lua')
-      return '' unless File.file?(path)
-      puts "📦 Preloading lua/log_packets.lua" if verbosity >= 1
-      File.read(path) + "\n"
+    # Load helper Lua files from ZBSpec/lua/ (names from config['helpers']), before spec_helper
+    def load_helpers_list
+      helpers = Array(config['helpers']).compact
+      helpers.each_with_object([]) do |name, out|
+        base = name.to_s.end_with?('.lua') ? name.to_s.chomp('.lua') : name.to_s
+        next if base.empty?
+        path = File.join(ZBSpec.root, 'lua', "#{base}.lua")
+        next unless File.file?(path)
+        puts "📦 Preloading lua/#{base}.lua" if verbosity >= 1
+        out << [base, File.read(path) + "\n"]
+      end
     end
 
     # Check if mod is loaded

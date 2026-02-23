@@ -1,8 +1,16 @@
 # see https://github.com/zed-0xff/zbspec
 
+# default is true, some cheat features like instant timed actions are not available when false
+debug: true
+
 unpause: false
 auto_shutdown: false
-debug: true
+
+# lua file names from ZBSpec/lua/, loaded before spec/spec_helper.lua
+helpers:
+  - common_helpers
+#  - log_events
+#  - log_packets
 
 mods:
   - { id: "your-mod-id", path: "." }

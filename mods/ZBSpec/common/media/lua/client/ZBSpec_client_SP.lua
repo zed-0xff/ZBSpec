@@ -23,11 +23,17 @@ debugScenarios.DebugScenarioZBSpec = {
     end
 }
 
--- select world
---require "OptionScreens/WorldSelect"
---zbsHook(WorldSelect, {
---    hasChoices = function()
---        return false -- skip world selection
---    end
---})
+-- start the debug scenario even when not in debug mode, to allow running the tests in a normal game
+if not getDebug() then
+    if type(LoadMainScreenPanelInt) == "function" then
+        local prevLoadMainScreenPanelInt = LoadMainScreenPanelInt
 
+        LoadMainScreenPanelInt = function(ingame, ...)
+            prevLoadMainScreenPanelInt(ingame, ...)
+
+            if not ingame then
+                doDebugScenarios()
+            end
+        end
+    end
+end
