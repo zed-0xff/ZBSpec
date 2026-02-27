@@ -6,6 +6,7 @@ local events = {
     "OnWorldSound",
 
     -- player
+    "OnDoTileBuilding2",
     "OnPreFillWorldObjectContextMenu",
     "OnFillWorldObjectContextMenu",
     "OnPlayerGetDamage",                  -- X_X
@@ -34,6 +35,7 @@ local events = {
     "OnClimateTickDebug",
     "OnFETick",
     "OnRenderTick",
+    "OnSleepingTick",
     "OnTick",
     "OnTickEvenPaused",
 
@@ -69,6 +71,9 @@ local events = {
     "OnObjectLeftMouseButtonUp",
     "OnObjectRightMouseButtonDown",
     "OnObjectRightMouseButtonUp",
+
+    -- misc
+    "OnSteamServerResponded",
 }
 ZBEventLog.exclude(events)
 ZBEventLog.enable()
