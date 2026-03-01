@@ -53,6 +53,7 @@ module ZBSpec
         zbspec -i --script foo.lua  # Run script then interactive console
         zbspec --port 4444 --script foo.lua  # Send script to port only, then exit
         zbspec --script foo.lua   # Send script to all active instances
+        zbspec --script foo.lua --json   # Output script result as JSON
         echo 'return 1+1' | zbspec --port 4444   # Run stdin script on port
         echo 'return 1+1' | zbspec               # Run stdin script on all instances
         zbspec --client -i        # Interactive console (client only)
@@ -69,6 +70,7 @@ module ZBSpec
       interactive: false,
       port: nil,
       script: nil,
+      json: false,
       redirect_output: nil,
       restart: false,
       restart_only: false,
@@ -151,6 +153,7 @@ module ZBSpec
         opts.on('-i', '--interactive', 'Interactive Lua console') { options[:interactive] = true }
         opts.on('--port PORT', Integer, 'Connect to API port (with -i: skip config and instance discovery)') { |p| options[:port] = p }
         opts.on('--script FILENAME', 'Execute Lua script: with -i run then REPL; with --port send to port only; else send to all instances') { |f| options[:script] = f }
+        opts.on('--json', 'Output script result as JSON (use with --script)') { options[:json] = true }
         opts.on('--no-redirect-stdio', 'Do not redirect game stdout/stderr to std.log') { options[:redirect_output] = false }
         opts.on('-h', '--help', 'Show this help') { options[:help] = true }
         opts.on('--version', 'Show version') { options[:version] = true }

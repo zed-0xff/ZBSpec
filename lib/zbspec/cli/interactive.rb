@@ -18,7 +18,7 @@ module ZBSpec
         clients = one_client_hash(port, client)
         load_spec_helper(clients) if opts[:helper]
 
-        execute_script_on_clients(clients, opts[:script], exit_on_error: true) if opts[:script]
+        execute_script_on_clients(clients, opts[:script], exit_on_error: true, json: opts[:json]) if opts[:script]
 
         run_session(clients, opts, "\nType Lua code to execute. Type 'exit' or press Ctrl+D/Ctrl+C to quit.\n\n")
       end
@@ -33,7 +33,7 @@ module ZBSpec
         abort "❌ Script file not found: #{opts[:script]}" unless File.file?(opts[:script])
 
         clients = one_client_hash(port, client)
-        execute_script_on_clients(clients, opts[:script], exit_on_error: true)
+        execute_script_on_clients(clients, opts[:script], exit_on_error: true, json: opts[:json])
       end
 
       def run_interactive(opts)
@@ -51,7 +51,7 @@ module ZBSpec
         clients.transform_values! { |data| data[:client] }
         load_spec_helper(clients) if opts[:helper]
 
-        execute_script_on_clients(clients, opts[:script], exit_on_error: false) if opts[:script]
+        execute_script_on_clients(clients, opts[:script], exit_on_error: false, json: opts[:json]) if opts[:script]
 
         run_session(clients, opts, "\nType Lua code to execute on all instances.\nType 'exit' or press Ctrl+D/Ctrl+C to quit.\n\n")
       end
@@ -76,17 +76,22 @@ module ZBSpec
         clients.each { |name, data| puts "  ✓ #{name.ljust(max_len)} (port #{data[:port]})" }
         clients.transform_values! { |data| data[:client] }
 
-        execute_script_on_clients(clients, path, exit_on_error: true)
+        execute_script_on_clients(clients, path, exit_on_error: true, json: opts[:json])
       end
 
-      def execute_script_on_clients(clients, path, exit_on_error: false)
+      def execute_script_on_clients(clients, path, exit_on_error: false, json: false)
         code = File.read(path)
         multi = clients.size > 1
         max_len = clients.keys.map(&:length).max || 0
+        results = {}
         clients.each do |name, client|
           result = client.execute(code)
           next if result.nil?
-          puts multi ? "[#{name.ljust(max_len)}] #{result.inspect}" : result.inspect
+          if json
+            results[name] = result
+          else
+            puts multi ? "[#{name.ljust(max_len)}] #{result.inspect}" : result.inspect
+          end
         rescue APIClient::LuaError => e
           prefix = multi ? "[#{name.ljust(max_len)}] " : ""
           puts "#{prefix}Error: #{e.error_message}"
@@ -96,6 +101,7 @@ module ZBSpec
           puts (multi ? "[#{name.ljust(max_len)}] " : "") + "Error: #{e.class}: #{e.message}"
           exit 1 if exit_on_error
         end
+        puts JSON.generate(multi ? results : results.values.first) if json && !results.empty?
       end
 
       def load_spec_helper(clients)
