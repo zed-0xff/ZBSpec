@@ -9,7 +9,7 @@ module ZBSpec
     attr_reader :port, :base_uri, :host, :label
     attr_accessor :verbosity, :sandbox
 
-    def initialize(port: nil, host: '127.0.0.1', port_file: nil, label: nil, verbosity: 0, sandbox: true)
+    def initialize(port: nil, host: '127.0.0.1', port_file: nil, label: nil, verbosity: 0, sandbox: nil)
       @port = port
       @host = host
       @port_file = port_file
@@ -126,11 +126,11 @@ module ZBSpec
     ERROR_GLOBAL_VALUE  = 'ZBSpec_currentTest'.freeze
 
     # Execute Lua code in the game.
-    # When sandbox is false (from config), sends sandbox=false so server uses global _G.
     def execute(lua_code, depth: 5, chunkname: nil, retries: 3)
       uri = base_uri.dup
       params = ["depth=#{depth}"]
       params << "sandbox=false" if @sandbox == false
+      params << "sandbox=true"  if @sandbox == true
       params << "chunkname=#{URI.encode_www_form_component(chunkname)}" if chunkname
       uri.query = params.join('&')
 

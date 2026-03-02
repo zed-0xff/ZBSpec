@@ -44,11 +44,11 @@ module ZBSpec
         zbspec --restart-only     # Restart instances only (no tests)
         zbspec --init             # Create default config and stub spec
         zbspec -V 42.13           # Use game config from configs/42.13
-        zbspec --sp -1             # SP with first game_version only
-        zbspec --mp -1             # MP with first game_version only
+        zbspec --sp -1            # SP with first game_version only
+        zbspec --mp -1            # MP with first game_version only
         zbspec -i                 # Interactive console (all instances)
-        zbspec -i --no-sandbox    # Interactive console without Lua sandbox
-        zbspec -i --helper       # Interactive console and load spec/spec_helper.lua
+        zbspec -i --sandbox       # Interactive console with Lua sandbox
+        zbspec -i --helper        # Interactive console and load spec/spec_helper.lua
         zbspec -i --port 4444     # Interactive console (connect to port only, no config)
         zbspec -i --script foo.lua  # Run script then interactive console
         zbspec --port 4444 --script foo.lua  # Send script to port only, then exit
@@ -80,7 +80,7 @@ module ZBSpec
       init: false,
       version: false,
       help: false,
-      sandbox: true,
+      sandbox: false,
       helper: false
     }.freeze
 
@@ -158,7 +158,7 @@ module ZBSpec
         opts.on('-h', '--help', 'Show this help') { options[:help] = true }
         opts.on('--version', 'Show version') { options[:version] = true }
         opts.on('--init', 'Create default config and stub spec') { options[:init] = true }
-        opts.on('--[no-]sandbox', 'Use sandbox for interactive Lua only (default: on)') { |v| options[:sandbox] = v }
+        opts.on('--[no-]sandbox', 'Use sandbox') { |v| options[:sandbox] = v }
         opts.on('--[no-]helper', 'Load spec/spec_helper.lua in interactive console (default: off)') { |v| options[:helper] = v }
       end
       parser.parse!(argv)

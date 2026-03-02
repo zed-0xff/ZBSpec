@@ -18,8 +18,8 @@ module ZBSpec
       @server_launcher = GameLauncher.new(server_config, label: 'server', verbosity: verbosity)
       @client_launcher = GameLauncher.new(client_config, label: 'client', verbosity: verbosity)
 
-      # Create API clients for each (sandbox from config: false => send sandbox=false on requests)
-      sandbox = @config['sandbox'] != false
+      # Create API clients for each
+      sandbox = @config['sandbox']
       @server_api = APIClient.new(port_file: server_port_file, label: 'server', verbosity: verbosity, sandbox: sandbox)
       @client_api = APIClient.new(port_file: client_port_file, label: 'client', verbosity: verbosity, sandbox: sandbox)
     end

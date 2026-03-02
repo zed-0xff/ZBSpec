@@ -8,7 +8,7 @@ module ZBSpec
       def run
         created = []
         FileUtils.mkdir_p('spec/shared')
-        [['spec/zbspec.yml', config_yaml], ['spec/shared/core_spec.lua', stub_spec]].each do |path, content|
+        [['spec/zbspec.yml', config_yaml], ['spec/shared/log_spec.lua', log_spec]].each do |path, content|
           if File.exist?(path)
             puts "  (existing) #{path}"
           else
@@ -25,25 +25,18 @@ module ZBSpec
           created.each { |p| puts "  #{p}" }
           puts "\nRun: zbspec"
         else
-          puts "✓ spec/zbspec.yml and spec/shared/core_spec.lua already exist."
+          puts "✓ spec/zbspec.yml and spec/shared/log_spec.lua already exist."
         end
       end
 
       def config_yaml
         path = File.expand_path('../templates/zbspec.yml', __dir__)
-        File.read(path)
+        File.read(path).gsub("your-mod-id", File.basename(Dir.pwd))
       end
 
-      def stub_spec
-        <<~LUA
-          describe("example", function()
-              it("passes", function()
-                  assert.eq(4, 2 + 2)
-              end)
-          end)
-
-          return ZBSpec.run()
-        LUA
+      def log_spec
+        path = File.expand_path('../templates/log_spec.lua', __dir__)
+        File.read(path)
       end
 
       def ensure_gitignore

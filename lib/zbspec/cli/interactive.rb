@@ -119,7 +119,7 @@ module ZBSpec
       def connect_port_client(opts)
         port = opts[:port].to_i
         abort "❌ Invalid port: #{opts[:port]}" if port <= 0 || port > 65_535
-        sandbox = opts[:interactive] ? opts[:sandbox] : true
+        sandbox = opts[:sandbox]
         client = APIClient.new(port: port, verbosity: opts[:verbosity], sandbox: sandbox)
         unless client.ready?
           abort "❌ Cannot connect to port #{port}. Is the game running with ZombieBuddy?"

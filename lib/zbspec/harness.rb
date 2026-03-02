@@ -15,7 +15,7 @@ module ZBSpec
       # Use the same cache dir logic as the launcher
       port_file = File.join(@launcher.get_cache_dir, 'zbLuaAPI.txt')
       label = @config['server_mode'] ? 'server' : 'sp'
-      sandbox = @config['sandbox'] != false
+      sandbox = @config['sandbox']
       @api_client = APIClient.new(port_file: port_file, label: label, verbosity: verbosity, sandbox: sandbox)
       
       # Use provided test runner class or default

@@ -25,7 +25,7 @@ module ZBSpec
       'mods' => [],
       'spec_glob' => 'spec/**/*_spec.lua',
       'helpers' => [],                  # Lua file names from ZBSpec/lua/, loaded before spec/spec_helper.lua
-      'sandbox' => true,                # Lua execution env: true = request-scoped env, false = global _G
+      'sandbox' => false,               # Lua execution env: true = request-scoped env, false = global _G
       'ready_condition' => nil          # Lua expression to wait for before specs (e.g. "getPlayer() ~= nil")
     }.freeze
 
