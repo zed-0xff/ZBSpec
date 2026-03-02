@@ -418,11 +418,17 @@ module ZBSpec
           raise GameLaunchError, "Mod path not found: #{entry['path']} (resolved: #{src})" unless File.exist?(src)
           FileUtils.ln_s(src, mod_link, target_directory: false, force: true)
         elsif (steam_id = entry['steam_id'])
-          src = steam_workshop_mod_path(steam_id, mod)
-          unless File.exist?(src)
-            raise GameLaunchError, "Steam workshop mod not installed: #{mod} (steam_id=#{steam_id}). Expected: #{src}"
+          mod_mods_path = steam_workshop_mods_path(steam_id)
+          unless File.exist?(mod_mods_path)
+            raise GameLaunchError, "Steam workshop mod #{entry.inspect} not installed in #{mod_mods_path.inspect}"
           end
-          FileUtils.ln_s(src, mod_link, target_directory: false, force: true)
+          Dir[File.join(mod_mods_path, '*')].each do |dirname|
+            if File.directory?(dirname)
+              src = dirname
+              dst = File.join(mods_dir, File.basename(dirname))
+              FileUtils.ln_s(src, dst, target_directory: false, force: true)
+            end
+          end
         else
           user_mod_path = File.join(user_mods_dir, mod)
           FileUtils.ln_s(user_mod_path, mod_link, target_directory: false, force: true) if File.exist?(user_mod_path)
@@ -431,9 +437,9 @@ module ZBSpec
 
     end
 
-    def steam_workshop_mod_path(steam_id, mod_name)
+    def steam_workshop_mods_path(steam_id)
       File.expand_path(
-        "~/Library/Application Support/Steam/steamapps/workshop/content/108600/#{steam_id}/mods/#{mod_name}"
+        "~/Library/Application Support/Steam/steamapps/workshop/content/108600/#{steam_id}/mods"
       )
     end
 
