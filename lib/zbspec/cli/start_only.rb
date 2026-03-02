@@ -35,11 +35,42 @@ module ZBSpec
       end
 
       def start_sp_and_wait(opts, config_overrides)
-        config = sp_config(opts[:config], config_overrides)
-        launcher = GameLauncher.new(config, verbosity: opts[:verbosity])
+        versions = HarnessDispatch.resolve_versions(opts, config_overrides)
+        if versions.size <= 1
+          config = sp_config(opts[:config], config_overrides.merge('game_version' => versions.first))
+          launcher = GameLauncher.new(config, label: 'sp', verbosity: opts[:verbosity])
+          launcher.start
+          api = APIClient.new(port_file: File.join(config['cache_dir'], 'zbLuaAPI.txt'), label: 'sp', verbosity: opts[:verbosity])
+          wait_apis("SP", api, config['startup_timeout'] || 120, launcher.pid)
+          return
+        end
+        puts "📦 Starting #{versions.size} SP instances: #{versions.join(', ')}"
+        version_results = versions.map do |version|
+          Thread.new do
+            overrides = config_overrides.merge('game_version' => version)
+            config = sp_config(opts[:config], overrides)
+            launch_one_sp(config, opts.merge(verbosity: -1))
+            [version, true]
+          rescue StandardError => e
+            [version, e]
+          end
+        end
+        version_results.each do |th|
+          version, result = th.value
+          if result.is_a?(StandardError)
+            puts "  ✗ SP #{version}: #{result.message}"
+            raise result
+          end
+          puts "  ✓ SP #{version} API ready"
+        end
+      end
+
+      def launch_one_sp(config, opts)
+        launcher = GameLauncher.new(config, label: 'sp', verbosity: opts[:verbosity])
         launcher.start
         api = APIClient.new(port_file: File.join(config['cache_dir'], 'zbLuaAPI.txt'), label: 'sp', verbosity: opts[:verbosity])
-        wait_apis("SP", api, config['startup_timeout'] || 120, launcher.pid)
+        api.discover_port(timeout: config['startup_timeout'] || 120, process_pid: launcher.pid)
+        api.wait_for_ready(timeout: config['startup_timeout'] || 120, process_pid: launcher.pid)
       end
 
       def server_config(config_path, overrides)
