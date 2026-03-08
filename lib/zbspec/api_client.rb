@@ -9,13 +9,14 @@ module ZBSpec
     attr_reader :port, :base_uri, :host, :label
     attr_accessor :verbosity, :sandbox
 
-    def initialize(port: nil, host: '127.0.0.1', port_file: nil, label: nil, verbosity: 0, sandbox: nil)
+    def initialize(port: nil, host: '127.0.0.1', port_file: nil, label: nil, verbosity: 0, sandbox: nil, timeout: nil)
       @port = port
       @host = host
       @port_file = port_file
       @label = label
       @verbosity = verbosity
       @sandbox = sandbox
+      @timeout = timeout
       @base_uri = port ? URI("http://#{host}:#{port}/lua") : nil
     end
 
@@ -139,7 +140,14 @@ module ZBSpec
       attempts = 0
       begin
         attempts += 1
-        response = Net::HTTP.post(uri, lua_code, headers)
+        http = Net::HTTP.new(uri.hostname, uri.port)
+        http.open_timeout = 5
+        http.read_timeout = @timeout || 60
+        request = Net::HTTP::Post.new(uri.request_uri)
+        request.body = lua_code
+        request.content_type = 'text/plain'
+        headers.each { |k, v| request[k] = v }
+        response = http.request(request)
 
         # Handle error responses (500)
         if response.code == '500'

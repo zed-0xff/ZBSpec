@@ -52,8 +52,11 @@ module ZBSpec
         zbspec -i --port 4444     # Interactive console (connect to port only, no config)
         zbspec -i --script foo.lua  # Run script then interactive console
         zbspec --port 4444 --script foo.lua  # Send script to port only, then exit
+        zbspec --port 4444 --script foo.lua --timeout 10000  # 10s timeout for Lua execution
         zbspec --script foo.lua   # Send script to all active instances
         zbspec --script foo.lua --json   # Output script result as JSON
+        zbspec -e 'return 1+1'                   # Same as echo 'return 1+1' | zbspec
+        zbspec -e 'return 1+1' --port 4444       # Run code on port
         echo 'return 1+1' | zbspec --port 4444   # Run stdin script on port
         echo 'return 1+1' | zbspec               # Run stdin script on all instances
         zbspec --client -i        # Interactive console (client only)
@@ -70,6 +73,7 @@ module ZBSpec
       interactive: false,
       port: nil,
       script: nil,
+      eval: nil,
       json: false,
       redirect_output: nil,
       restart: false,
@@ -81,7 +85,8 @@ module ZBSpec
       version: false,
       help: false,
       sandbox: false,
-      helper: false
+      helper: false,
+      timeout: nil
     }.freeze
 
     MODE_REASONS = {
@@ -98,6 +103,7 @@ module ZBSpec
       return print_help(opts) if opts[:help]
       return run_stop if opts[:mode] == :stop
       return run_stdin_script(opts) if !$stdin.tty?
+      return run_eval_script(opts) if opts[:eval]
       return Interactive.run_interactive_port(opts) if opts[:interactive] && opts[:port]
       return Interactive.run_script_to_port(opts) if opts[:port] && opts[:script]
 
@@ -123,7 +129,7 @@ module ZBSpec
       maybe_restart(opts)
       return StartOnly.run(opts, config_overrides) if opts[:start_only]
       if opts[:script]
-        StartOnly.run(opts, config_overrides) if opts[:restart] || Instances.discover_interactive_clients(opts[:mode], verbosity: opts[:verbosity], game_version: opts[:game_version]).empty?
+        StartOnly.run(opts, config_overrides) if opts[:restart] || Instances.discover_interactive_clients(opts[:mode], verbosity: opts[:verbosity], game_version: opts[:game_version], timeout: opts[:timeout]).empty?
         return Interactive.run_script_all_instances(opts.merge(restart: false))
       end
 
@@ -153,7 +159,9 @@ module ZBSpec
         opts.on('-i', '--interactive', 'Interactive Lua console') { options[:interactive] = true }
         opts.on('--port PORT', Integer, 'Connect to API port (with -i: skip config and instance discovery)') { |p| options[:port] = p }
         opts.on('--script FILENAME', 'Execute Lua script: with -i run then REPL; with --port send to port only; else send to all instances') { |f| options[:script] = f }
+        opts.on('-e', '--eval CODE', 'Execute Lua code (same as echo CODE | zbspec)') { |c| options[:eval] = c }
         opts.on('--json', 'Output script result as JSON (use with --script)') { options[:json] = true }
+        opts.on('--timeout SECONDS', Integer, 'Timeout for Lua execution in seconds (script mode; also passed to ZombieBuddy when starting game)') { |s| options[:timeout] = s }
         opts.on('--no-redirect-stdio', 'Do not redirect game stdout/stderr to std.log') { options[:redirect_output] = false }
         opts.on('-h', '--help', 'Show this help') { options[:help] = true }
         opts.on('--version', 'Show version') { options[:version] = true }
@@ -181,6 +189,7 @@ module ZBSpec
       overrides = {}
       overrides['game_version'] = opts[:game_version] if opts[:game_version]
       overrides['redirect_output'] = opts[:redirect_output] unless opts[:redirect_output].nil?
+      overrides['lua_task_timeout'] = opts[:timeout] if opts[:timeout]
       overrides
     end
 
@@ -209,6 +218,23 @@ module ZBSpec
       puts "🛑 Stopping all ZBSpec instances..."
       Instances.stop_instances(Instances.discover_cache_dirs(:auto))
       puts "✓ Done"
+    end
+
+    def run_eval_script(opts)
+      code = opts[:eval].to_s.strip
+      return if code.empty?
+
+      f = Tempfile.create(['zbspec_eval', '.lua'])
+      f.write(code)
+      f.close
+      at_exit { File.unlink(f.path) }
+      run_script_opts = opts.merge(script: f.path)
+
+      if opts[:port]
+        Interactive.run_script_to_port(run_script_opts)
+      else
+        Interactive.run_script_all_instances(run_script_opts)
+      end
     end
 
     def run_stdin_script(opts)
