@@ -266,6 +266,9 @@ module ZBSpec
         'lua_server_port=random',
         'expose_classes=me.zed_0xff.zombie_buddy.Accessor,me.zed_0xff.zombie_buddy.Exposer'
       ]
+      if @verbosity > 0
+        agent_parts << "verbosity=#{@verbosity}"
+      end
       if (timeout_sec = config['lua_task_timeout']) && timeout_sec.to_i > 0
         agent_parts << "lua_task_timeout=#{timeout_sec.to_i * 1000}"
       end

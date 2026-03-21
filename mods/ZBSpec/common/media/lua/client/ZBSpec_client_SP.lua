@@ -23,6 +23,16 @@ debugScenarios.DebugScenarioZBSpec = {
     end
 }
 
+-- B41 does not call setMap(scenario.world) when launching a debug scenario, so we have to hook createWorld to set the map there
+if getCore():getGameVersion():getMajor() == 41 then
+    zbsHook(_G, {
+        createWorld = function(orig, ...)
+            getWorld():setMap("TestMap")
+            return orig(...)
+        end
+    })
+end
+
 -- start the debug scenario even when not in debug mode, to allow running the tests in a normal game
 if not getDebug() then
     if type(LoadMainScreenPanelInt) == "function" then

@@ -1,6 +1,4 @@
 -- autoconnect to server
-require "zbsHook"
-
 local firstTimeTbl = {
 }
 
