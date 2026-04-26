@@ -1,4 +1,7 @@
-plugins { id 'java' }
+plugins {
+    id 'java'
+    id 'io.github.zed-0xff.zb-gradle-plugin' version '1.0.1'
+}
 
 def osName = System.getProperty("os.name").toLowerCase()
 def HOME_DIR = System.getProperty("user.home")
