@@ -17,7 +17,7 @@ debugScenarios.DebugScenarioZBSpec = {
         getDebugOptions():setBoolean("DebugScenario.ForceLaunch", false) -- disarm to allow exiting to main menu
         UIManager.setShowLuaDebuggerOnError(false)
 
-        if SurvivalGuideManager.instance then
+        if SurvivalGuideManager and SurvivalGuideManager.instance and SurvivalGuideManager.instance.panel then
             SurvivalGuideManager.instance.panel:setVisible(false)
         end
     end
