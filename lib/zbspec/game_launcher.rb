@@ -6,6 +6,9 @@ module ZBSpec
   # Handles launching and stopping the game
   class GameLauncher
     LABEL_WIDTH = 8
+
+    ARCH = RUBY_PLATFORM.include?('aarch64') ? 'aarch64' : 'x86_64'
+
     attr_reader :config, :pid, :label
     attr_accessor :verbosity
 
@@ -203,6 +206,12 @@ module ZBSpec
       jars = Dir[File.join(@mac_game_root, '*.jar')].map { |f| File.basename(f) }
       classpath = (jars + ['.']).join(':')
 
+      java_lib_paths = [
+        ".",
+        File.join(@mac_java_home, 'lib'),
+        File.join(@mac_game_root, "mac-#{ARCH}"),
+      ]
+
       argv = [
         java_bin,
         '--enable-native-access=ALL-UNNAMED',
@@ -213,7 +222,8 @@ module ZBSpec
         '-Xmx3072m',
         '-XX:+UseZGC',
         '-XX:-OmitStackTraceInFastThrow',
-        "-Djava.library.path=.:#{File.join(@mac_java_home, 'lib')}",
+        "-Djava.library.path=#{java_lib_paths.join(':')}",
+        "-Dzb.config_dir=#{cache_dir}/.zombie_buddy",
         javaagent_arg,
         '-classpath', classpath
       ]
@@ -264,6 +274,7 @@ module ZBSpec
       agent_parts = [
         'experimental',
         'lua_server_port=random',
+        'prop_prefix=zb',
         'expose_classes=me.zed_0xff.zombie_buddy.Accessor,me.zed_0xff.zombie_buddy.Exposer'
       ]
       if @verbosity > 0
@@ -512,16 +523,11 @@ module ZBSpec
 
     # macOS: JAVA_HOME from app's bundled JRE (prefer arch-matched, then zulu)
     def mac_java_home(app_dir)
-      arch = mac_arch
       jre_candidates = [
-        File.join(app_dir, 'Contents', 'PlugIns', "jre-#{arch}", 'Contents', 'Home'),
+        File.join(app_dir, 'Contents', 'PlugIns', "jre-#{ARCH}", 'Contents', 'Home'),
         File.join(app_dir, 'Contents', 'PlugIns', 'zulu-17.jre', 'Contents', 'Home')
       ]
       jre_candidates.find { |d| File.directory?(d) }
-    end
-
-    def mac_arch
-      RUBY_PLATFORM.include?('aarch64') ? 'aarch64' : 'x86_64'
     end
 
     # macOS: GAME_ROOT = app_dir/Contents/Java
