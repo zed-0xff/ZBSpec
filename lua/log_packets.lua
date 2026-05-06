@@ -31,5 +31,5 @@ local packets = {
     "ZombieSynchronizationUnreliablePacket",
 }
 
-ZBPacketLog.exclude(packets)
-ZBPacketLog.enable()
+ZombieBuddy.PacketLog.exclude(packets)
+ZombieBuddy.PacketLog.enable()

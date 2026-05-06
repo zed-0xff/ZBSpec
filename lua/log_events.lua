@@ -75,5 +75,5 @@ local events = {
     -- misc
     "OnSteamServerResponded",
 }
-ZBEventLog.exclude(events)
-ZBEventLog.enable()
+ZombieBuddy.EventLog.exclude(events)
+ZombieBuddy.EventLog.enable()
