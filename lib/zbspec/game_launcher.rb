@@ -174,7 +174,7 @@ module ZBSpec
       game_exe = find_executable
 
       if mac?
-        build_mac_launch_args(game_exe, log_file: log_file)
+        config['same_console'] ? build_mac_direct_args(game_exe) : build_mac_launch_args(game_exe, log_file: log_file)
       else
         build_other_launch_args(game_exe)
       end
@@ -199,6 +199,12 @@ module ZBSpec
       )
 
       { app: app }
+    end
+
+    def build_mac_direct_args(java_bin)
+      cache_dir = File.expand_path(config['cache_dir'] || default_cache_dir)
+      init_cachedir(cache_dir)
+      build_java_argv(java_bin, cache_dir)
     end
 
     # argv for run.sh: first = java binary, rest = JVM + game args

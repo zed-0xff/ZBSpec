@@ -42,6 +42,7 @@ module ZBSpec
         zbspec --stop             # Stop all running instances
         zbspec --restart          # Restart instances before running specs
         zbspec --restart-only     # Restart instances only (no tests)
+        zbspec --same-console     # Launch game in current console (skip macOS app bundle)
         zbspec --init             # Create default config and stub spec
         zbspec -V 42.13           # Use game config from configs/42.13
         zbspec --sp -1            # SP with first game_version only
@@ -86,7 +87,8 @@ module ZBSpec
       help: false,
       sandbox: false,
       helper: false,
-      timeout: nil
+      timeout: nil,
+      same_console: false
     }.freeze
 
     MODE_REASONS = {
@@ -162,7 +164,9 @@ module ZBSpec
         opts.on('-e', '--eval CODE', 'Execute Lua code (same as echo CODE | zbspec)') { |c| options[:eval] = c }
         opts.on('--json', 'Output script result as JSON (use with --script)') { options[:json] = true }
         opts.on('--timeout SECONDS', Integer, 'Timeout for Lua execution in seconds (script mode; also passed to ZombieBuddy when starting game)') { |s| options[:timeout] = s }
-        opts.on('--no-redirect-stdio', 'Do not redirect game stdout/stderr to std.log') { options[:redirect_output] = false }
+        opts.on('--redirect-output VALUE', %w[true false auto],
+                'Redirect game stdout/stderr to std.log: true, false, or auto (default: auto = redirect unless --same-console)') { |v| options[:redirect_output] = v }
+        opts.on('--same-console', 'Launch game in the current console (skips macOS app bundle; default on non-macOS)') { options[:same_console] = true }
         opts.on('-h', '--help', 'Show this help') { options[:help] = true }
         opts.on('--version', 'Show version') { options[:version] = true }
         opts.on('--init', 'Create default config and stub spec') { options[:init] = true }
@@ -188,8 +192,13 @@ module ZBSpec
     def build_config_overrides(opts)
       overrides = {}
       overrides['game_version'] = opts[:game_version] if opts[:game_version]
-      overrides['redirect_output'] = opts[:redirect_output] unless opts[:redirect_output].nil?
       overrides['lua_task_timeout'] = opts[:timeout] if opts[:timeout]
+      overrides['same_console'] = true if opts[:same_console]
+      case opts[:redirect_output]
+      when 'true'  then overrides['redirect_output'] = true
+      when 'false' then overrides['redirect_output'] = false
+      else              overrides['redirect_output'] = !opts[:same_console]
+      end
       overrides
     end
 
