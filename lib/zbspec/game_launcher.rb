@@ -404,11 +404,13 @@ module ZBSpec
       mods       = build_mod_list
       game_port  = config['server_mode'] ? resolve_game_port(cache_dir) : nil
 
-      Dir[File.join(config_dir, '**/*.{ini,lua,txt,erb}')].each do |src|
+      Dir.glob(File.join(config_dir,'**/*.{ini,json,lua,txt,erb}'), File::FNM_DOTMATCH).each do |src|
         next unless File.file?(src)
         next if File.basename(File.dirname(src)).downcase == 'server' && !config['server_mode']
 
-        relative_path = src.sub("#{config_dir}/", '').sub(%r{\A/}, '')
+        relative_path = src.sub(/^#{Regexp.escape(config_dir)}/, '').sub(%r{\A/}, '')
+        raise if relative_path == src
+
         dest_path = File.join(cache_dir, relative_path)
         dest_path = dest_path.sub(/\.erb\z/, '') if relative_path.end_with?('.erb')
         FileUtils.mkdir_p(File.dirname(dest_path))
