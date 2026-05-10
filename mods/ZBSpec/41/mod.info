@@ -5,4 +5,4 @@ url=https://github.com/zed-0xff
 
 javaJarFile=media/java/shared/ZBSpec.jar
 javaPkgName=me.zed_0xff.zbspec
-ZBVersionMin=1.6.0
+ZBVersionMin=2.4.0
