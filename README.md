@@ -193,8 +193,8 @@ Full `zbspec.yml` options:
 # Timeout for game startup (seconds)
 startup_timeout: 120
 
-# Auto-shutdown game after specs
-auto_shutdown: false
+# Shutdown game after specs: never | always | auto (only when all specs pass)
+shutdown: auto
 
 # Path to PZ (for auto-launch on macOS)
 game_path: /Applications/Project Zomboid.app

@@ -4,7 +4,7 @@
 debug: true
 
 unpause: false
-auto_shutdown: false
+shutdown: auto  # never | always | auto (shutdown only when all specs pass)
 
 # lua file names from ZBSpec/lua/, loaded before spec/spec_helper.lua
 helpers:

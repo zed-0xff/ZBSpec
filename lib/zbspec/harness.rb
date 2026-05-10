@@ -33,7 +33,8 @@ module ZBSpec
       boot_instance_api
       validate_instance_mode
       results = run_specs_and_report
-      launcher.stop if config['auto_shutdown']
+      shutdown_val = config['shutdown']
+      launcher.stop if shutdown_val == 'always' || (shutdown_val == 'auto' && !results.failed?)
       results
     rescue StandardError => e
       handle_error(e)

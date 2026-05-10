@@ -35,7 +35,7 @@ module ZBSpec
       print_startup_banner
       launch_instances_parallel
       wait_for_instances
-      run_specs
+      @last_results = run_specs
     rescue StandardError => e
       handle_error(e)
     ensure
@@ -212,11 +212,12 @@ module ZBSpec
     end
 
     def shutdown_if_needed
-      if @config['auto_shutdown']
-        puts "\n🛑 Shutting down..."
-        @client_launcher.stop if @client_launcher&.running?
-        @server_launcher.stop if @server_launcher&.running?
-      end
+      shutdown_val = @config['shutdown']
+      should_stop = shutdown_val == 'always' || (shutdown_val == 'auto' && @last_results && !@last_results.failed?)
+      return unless should_stop
+      puts "\n🛑 Shutting down..."
+      @client_launcher.stop if @client_launcher&.running?
+      @server_launcher.stop if @server_launcher&.running?
     end
 
     def handle_error(error)
