@@ -262,7 +262,7 @@ function ZBSpec.skip(reason)
     skipReason = reason or "skipped"
 end
 function ZBSpec.pending(name, fn)
-    local fullName = currentDescribe ~= "" and (currentDescribe .. " " .. tostring(name)) or tostring(name)
+    local fullName = (currentDescribe and currentDescribe ~= "") and (currentDescribe .. " " .. tostring(name)) or tostring(name)
     table.insert(skipped, { name = fullName, reason = "pending" })
 end
 
@@ -482,9 +482,13 @@ function ZBSpec.server_eval(code)
         if fn then return fn() else error("server_eval compile error: " .. tostring(err)) end
     end
     evalIdCounter = evalIdCounter + 1
-    local id = evalIdCounter
+    -- String ids: numbers round-trip through sendClientCommand/sendServerCommand
+    -- as Java Doubles, which do not match a Lua-number table key.
+    local id = "eval_" .. tostring(evalIdCounter)
     sendClientCommand(MODULE_NAME, "eval", { code = code, id = id })
-    ZBSpec.wait_for(function() return evalResults[id] ~= nil end)
+    ZBSpec.timeout(30, function()
+        ZBSpec.wait_for(function() return evalResults[id] ~= nil end)
+    end)
     local result = evalResults[id]
     evalResults[id] = nil
     if result.success then return result.value
@@ -495,9 +499,33 @@ function ZBSpec.all_exec(code)
     if fn then fn() else error("all_exec compile error: " .. tostring(err)) end
     if isClient and isClient() then sendClientCommand(MODULE_NAME, "exec", { code = code }) end
 end
+
+-- Run code on ANOTHER connected client (by username) and return its result.
+-- Relay: this client -> server (eval_on_client) -> target client (eval_request)
+-- -> server (eval_response) -> this client (eval_result). MP client only.
+function ZBSpec.client_eval(targetUsername, code)
+    if not (isClient and isClient()) then
+        error("client_eval is only available on a client")
+    end
+    evalIdCounter = evalIdCounter + 1
+    local id = "client_eval_" .. tostring(evalIdCounter)
+    sendClientCommand(MODULE_NAME, "eval_on_client", { target = targetUsername, code = code, id = id })
+    ZBSpec.timeout(30, function()
+        ZBSpec.wait_for(function() return evalResults[id] ~= nil end)
+    end)
+    local result = evalResults[id]
+    evalResults[id] = nil
+    if result.success then return result.value
+    else error("client_eval error: " .. tostring(result.error)) end
+end
 if isClient and isClient() then
     Events.OnServerCommand.Add(function(module, command, args)
-        if module == MODULE_NAME and command == "eval_result" then evalResults[args.id] = args end
+        if module ~= MODULE_NAME then return end
+        -- eval_request is handled by the ZBSpec client mod (registered on every
+        -- MP client), so a non-spec client can serve client_eval() too.
+        if command == "eval_result" then
+            evalResults[args.id] = args
+        end
     end)
 end
 
@@ -537,6 +565,7 @@ function ZBSpec._make_describe_env(parent_env, name)
         server_exec = ZBSpec.server_exec,
         server_eval = ZBSpec.server_eval,
         all_exec = ZBSpec.all_exec,
+        client_eval = ZBSpec.client_eval,
     }, { __index = parent_env or _G })
     -- Nested describe: same env shape, parent is this env
     env.describe = function(inner_name, inner_fn)

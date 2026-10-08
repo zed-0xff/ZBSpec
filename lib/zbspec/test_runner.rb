@@ -147,8 +147,22 @@ module ZBSpec
           result['passed_tests'].each { |name| tests << test(name, true) }
         elsif result['passed'].to_i > 0 && tests.empty?
           tests << test(spec_file, true)
-        elsif tests.empty? && result['failed'].to_i == 0
-          tests << test(spec_file, true)
+        end
+
+        # Skipped/pending tests (e.g. a spec file guarded off for this instance)
+        if result['skipped_tests'].is_a?(Array)
+          result['skipped_tests'].each do |s|
+            name = s.is_a?(Hash) ? (s['name'] || spec_file) : s.to_s
+            reason = s.is_a?(Hash) ? s['reason'] : nil
+            label = reason && reason != 'pending' ? "#{name} (skipped: #{reason})" : "#{name} (skipped)"
+            tests << test(label, true, skipped: true)
+          end
+        end
+
+        # A file that registered no tests at all (e.g. intentionally guarded out
+        # before any describe) is reported as skipped, not as a passing test.
+        if tests.empty? && result['failed'].to_i == 0
+          tests << test("#{spec_file} (skipped: no tests ran)", true, skipped: true)
         end
       when true, 'true'
         tests << test(spec_file, true)
@@ -193,8 +207,8 @@ module ZBSpec
     end
 
     # Helper to create a test case
-    def test(name, passed, error: nil, test_name: nil, assertion_name: nil, assertion_source: nil)
-      TestCase.new(name, passed, error: error, test_name: test_name, assertion_name: assertion_name, assertion_source: assertion_source)
+    def test(name, passed, error: nil, test_name: nil, assertion_name: nil, assertion_source: nil, skipped: false)
+      TestCase.new(name, passed, error: error, test_name: test_name, assertion_name: assertion_name, assertion_source: assertion_source, skipped: skipped)
     end
 
     # Load zbspec.lua framework (sent via multipart before spec_helper and spec file)

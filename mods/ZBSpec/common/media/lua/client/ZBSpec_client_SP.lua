@@ -34,6 +34,10 @@ if getCore():getGameVersion():getMajor() == 41 then
 end
 
 -- start the debug scenario even when not in debug mode, to allow running the tests in a normal game
+-- NB: never do this on an MP client. The client is launched with +connect, so isClient()
+-- is true as soon as the connection starts; launching the SP TestMap scenario there forces
+-- LoadingQueueState during the server handshake and cancels the connection
+-- ("loading-queue-canceled"), dropping the client back to singleplayer.
 if not getDebug() then
     if type(LoadMainScreenPanelInt) == "function" then
         local prevLoadMainScreenPanelInt = LoadMainScreenPanelInt
@@ -41,7 +45,7 @@ if not getDebug() then
         LoadMainScreenPanelInt = function(ingame, ...)
             prevLoadMainScreenPanelInt(ingame, ...)
 
-            if not ingame then
+            if not ingame and not isClient() and not isServer() then
                 doDebugScenarios()
             end
         end

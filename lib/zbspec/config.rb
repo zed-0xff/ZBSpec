@@ -22,7 +22,25 @@ module ZBSpec
       'game_versions_root' => '~/projects/zomboid/versions',
       'game_versions' => ['default'],
       'debug' => true,
+      'debug_jvm' => false,             # when true, also pass -Ddebug=1 (custom .bat style)
       'mods' => [],
+      'spec_dir' => 'spec',             # folder holding client/ server/ shared/ specs
+
+      # --- Launch configuration (all optional; defaults reproduce the built-in
+      # launch path). Use these to replace hand-written start scripts. ---
+      'server_path' => nil,             # dedicated-server install dir (server mode); falls back to game_path
+      'launch_command' => nil,          # full argv override (Array or shell string). Placeholders:
+                                        # ${JAVA} ${GAME} ${CACHEDIR} ${SERVERNAME} ${ADMINPASSWORD} ${PORT} ${AGENT}
+      'launcher' => nil,                # wrapper script/binary to exec in the install dir (instead of building java argv)
+      'jvm_args' => [],                 # extra JVM args (memory, -D..., ...)
+      'server_args' => [],              # extra CLI args in server mode (e.g. -servername X -statistic 0)
+      'client_args' => [],              # extra CLI args for SP/MP clients
+      'env' => {},                      # extra environment variables for the launched process
+      'main_class' => nil,              # override main class
+      'classpath' => nil,               # override classpath (Array joined with ':' or a String already joined)
+      'natives_dir' => nil,             # override native-lib dir, relative to the install dir
+      'steam' => nil,                   # true => -Dzomboid.steam=1 (no -nosteam); false/nil => non-Steam
+      'headless' => nil,                # override -Djava.awt.headless; nil => server:true, client:false
       'spec_glob' => 'spec/**/*_spec.lua',
       'helpers' => [],                  # Lua file names from ZBSpec/lua/, loaded before spec/spec_helper.lua
       'sandbox' => false,               # Lua execution env: true = request-scoped env, false = global _G

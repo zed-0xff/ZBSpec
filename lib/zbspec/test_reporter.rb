@@ -41,20 +41,22 @@ module ZBSpec
 
     def display_section(name, test_cases, compact: false, max_name_width: 0)
       passed_count = test_cases.count(&:passed?)
+      failed_count = test_cases.count(&:failed?)
+      skipped_count = test_cases.count(&:skipped?)
       total_count = test_cases.size
-      all_passed = passed_count == total_count
       display_name = section_display_name(name)
 
       # verbosity <= 0: one line per section; when failures, list failed specs below
       if verbosity <= 0
         padded = display_name.ljust(max_name_width)
-        if all_passed
-          puts "#{BOLD}#{padded}#{RESET} #{GREEN}#{passed_count}/#{total_count} passed#{RESET}"
+        suffix = counts_suffix(failed_count, skipped_count)
+        if failed_count.zero?
+          puts "#{BOLD}#{padded}#{RESET} #{GREEN}#{passed_count}/#{total_count} passed#{suffix}#{RESET}"
         else
-          failed_count = total_count - passed_count
-          puts "#{BOLD}#{padded}#{RESET} #{passed_count}/#{total_count} passed#{RED} (#{failed_count} failed)#{RESET}"
+          puts "#{BOLD}#{padded}#{RESET} #{passed_count}/#{total_count} passed#{RED}#{suffix}#{RESET}"
           test_cases.each do |t|
-            next if t.passed?
+            next unless t.failed?
+
             puts "  #{RED}✗#{RESET} #{t.name}"
             display_error_details(t)
           end
@@ -68,6 +70,14 @@ module ZBSpec
         puts "  #{test.status_color}#{test.status_icon}#{RESET} #{test.name}"
         display_error_details(test) if test.error
       end
+    end
+
+    # " (N failed, M skipped)" — omits zero counts.
+    def counts_suffix(failed_count, skipped_count)
+      parts = []
+      parts << "#{failed_count} failed" if failed_count.positive?
+      parts << "#{skipped_count} skipped" if skipped_count.positive?
+      parts.empty? ? '' : " (#{parts.join(', ')})"
     end
 
     def display_error_details(test)
@@ -90,11 +100,12 @@ module ZBSpec
       puts '' if multiple_instances
       total = results.total_count
       passed = results.passed_count
+      suffix = counts_suffix(results.failed_count, results.skipped_count)
       total_label = multiple_instances ? "TOTAL".ljust(COMPACT_NAME_WIDTH) : "TOTAL"
       if results.passed?
-        puts "#{BOLD}#{total_label}#{RESET} #{GREEN}#{passed}/#{total} passed#{RESET}"
+        puts "#{BOLD}#{total_label}#{RESET} #{GREEN}#{passed}/#{total} passed#{suffix}#{RESET}"
       else
-        puts "#{BOLD}#{total_label}#{RESET} #{passed}/#{total} passed#{RED} (#{results.failed_count} failed)#{RESET}"
+        puts "#{BOLD}#{total_label}#{RESET} #{passed}/#{total} passed#{RED}#{suffix}#{RESET}"
         puts "#{RED}#{BOLD}✗ Some tests failed#{RESET}"
       end
     end

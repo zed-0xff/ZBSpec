@@ -227,6 +227,64 @@ username: ZBSpecPlayer
 password: ""
 ```
 
+### Launch overrides
+
+The built-in launcher works out of the box, but every value it hard-codes can be
+overridden, so a hand-written start script (custom `.bat`/`.sh`) can be replaced
+by configuration. All keys are optional and default to the built-in behavior.
+
+```yaml
+# Dedicated-server install used in server mode (defaults to game_path)
+server_path: "~/path/to/Project Zomboid Dedicated Server"
+
+steam: false          # true => -Dzomboid.steam=1 (and no -nosteam)
+debug_jvm: false      # true => also pass -Ddebug=1 (the custom .bat style)
+headless:             # -Djava.awt.headless; default: true for server, false for client
+
+jvm_args: ["-Xms4g", "-Xmx4g"]                  # extra JVM args
+server_args: ["-servername", "MyServer", "-statistic", "0"]
+client_args: []                                  # extra client args
+env: { "SOME_VAR": "value" }                     # extra environment variables
+main_class: "zombie.network.GameServer"          # override main class
+classpath: ["java/.", "java/projectzomboid.jar"] # override classpath
+natives_dir: "linux64"                            # native dir relative to install
+```
+
+For full control, `launch_command` replaces the internal argv entirely. The
+placeholders below are expanded before launch (unknown ones are left as-is, so
+typos show up in the logged command):
+
+| Placeholder | Value |
+| ----------- | ----- |
+| `${JAVA}` | bundled JVM (`jre64/bin/java`) |
+| `${GAME}` | install working dir |
+| `${CACHEDIR}` | per-instance cache dir |
+| `${SERVERNAME}` / `${ADMINPASSWORD}` / `${PORT}` | server values |
+| `${AGENT}` | ZombieBuddy `-javaagent` (required for tests) |
+
+```yaml
+launch_command:
+  - "${JAVA}"
+  - "-Djava.awt.headless=true"
+  - "-Dzomboid.steam=0"
+  - "${AGENT}"
+  - "-classpath"
+  - "java/.:java/projectzomboid.jar"
+  - "zombie/network/GameServer"
+  - "-cachedir=${CACHEDIR}"
+  - "${SERVERNAME}"
+  - "-nosteam"
+```
+
+Alternatively, `launcher` runs a wrapper script/binary in the install dir
+(relative paths resolve there; `.bat`/`.cmd` are wrapped in `cmd /c` on Windows)
+and passes `server_args`/`client_args`:
+
+```yaml
+launcher: "start-server-nosteam-custom.sh"
+```
+
+
 ## Spec Folder Structure
 
 Organize specs by where they should run:

@@ -4,15 +4,16 @@ module ZBSpec
   # Discovers spec files and determines run mode based on folder structure
   class SpecDiscovery
     SPEC_FOLDERS = {
-      client: 'spec/client',
-      server: 'spec/server',
-      shared: 'spec/shared'
+      client: 'client',
+      server: 'server',
+      shared: 'shared'
     }.freeze
 
     attr_reader :client_specs, :server_specs, :shared_specs
 
-    def initialize(base_dir: '.')
+    def initialize(base_dir: '.', spec_dir: 'spec')
       @base_dir = base_dir
+      @spec_dir = spec_dir
       @client_specs = discover_specs(:client)
       @server_specs = discover_specs(:server)
       @shared_specs = discover_specs(:shared) + discover_root_specs
@@ -83,15 +84,15 @@ module ZBSpec
     private
 
     def discover_specs(folder_key)
-      folder = File.join(@base_dir, SPEC_FOLDERS[folder_key])
+      folder = File.join(@base_dir, @spec_dir, SPEC_FOLDERS[folder_key])
       return [] unless File.directory?(folder)
 
       Dir.glob(File.join(folder, '**/*_spec.lua')).sort
     end
 
     def discover_root_specs
-      # Specs directly in spec/ folder (not in subfolders)
-      Dir.glob(File.join(@base_dir, 'spec/*_spec.lua')).sort
+      # Specs directly in the spec dir (not in subfolders)
+      Dir.glob(File.join(@base_dir, @spec_dir, '*_spec.lua')).sort
     end
   end
 end

@@ -17,3 +17,36 @@ mods:
 
 game_versions:
   - default
+
+# --- Optional launch overrides -------------------------------------------------
+# Defaults reproduce the built-in launcher; set these to replace a hand-written
+# start script (custom .bat/.sh) with ZBSpec-managed configuration.
+#
+# server_path: "~/path/to/Project Zomboid Dedicated Server"  # server mode; else game_path
+# steam: false            # true => -Dzomboid.steam=1 (no -nosteam)
+# debug_jvm: false        # true => also pass -Ddebug=1
+# jvm_args: ["-Xms4g", "-Xmx4g"]
+# server_args: ["-servername", "MyServer", "-statistic", "0"]
+# client_args: []
+# env: { "SOME_VAR": "value" }
+# main_class: "zombie.network.GameServer"
+# classpath: ["java/.", "java/projectzomboid.jar"]
+# natives_dir: "linux64"
+#
+# Full command override (bypasses the internal argv builder). Placeholders are
+# expanded before launch; ${AGENT} injects the ZombieBuddy java agent:
+# launch_command:
+#   - "${JAVA}"
+#   - "-Djava.awt.headless=true"
+#   - "-Dzomboid.steam=0"
+#   - "${AGENT}"
+#   - "-classpath"
+#   - "java/.:java/projectzomboid.jar"
+#   - "zombie/network/GameServer"
+#   - "-cachedir=${CACHEDIR}"
+#   - "${SERVERNAME}"
+#   - "-nosteam"
+#
+# Or run a wrapper script/binary (relative paths resolve against the install dir;
+# .bat/.cmd are wrapped in `cmd /c` on Windows). server_args/client_args are passed:
+# launcher: "start-server-nosteam-custom.sh"

@@ -21,11 +21,8 @@ module ZBSpec
       def stop_one(cache_dir, pid_file)
         pid = File.read(pid_file).strip.to_i
         name = File.basename(cache_dir)
-        Process.kill(0, pid)
         puts "  Stopping #{name} (PID: #{pid})..."
-        Process.kill('TERM', pid)
-        sleep 0.5
-        Process.kill('KILL', pid) if process_alive?(pid)
+        terminate(pid)
         puts "  ✓ Stopped #{name}"
       rescue Errno::ESRCH
         puts "  ⚠️  #{name} already stopped (stale PID file)"
@@ -33,15 +30,51 @@ module ZBSpec
         File.delete(pid_file)
       end
 
+      def terminate(pid)
+        if windows?
+          system('taskkill', '/PID', pid.to_s, '/T', '/F', out: File::NULL, err: File::NULL)
+        else
+          Process.kill('TERM', pid)
+          sleep 0.5
+          Process.kill('KILL', pid) if process_alive?(pid)
+        end
+      end
+
       def process_alive?(pid)
-        Process.kill(0, pid)
-        true
-      rescue Errno::ESRCH
+        if windows?
+          out = `tasklist /FI "PID eq #{pid}" /NH /FO CSV 2>NUL`
+          out.include?(pid.to_s)
+        else
+          Process.kill(0, pid)
+          true
+        end
+      rescue Errno::ESRCH, Errno::EINVAL
         false
       end
 
+      def windows?
+        RUBY_PLATFORM.include?('mingw') || RUBY_PLATFORM.include?('mswin')
+      end
+
+      # Roots that may contain cache_* dirs: the default ./tmp plus the configured
+      # cache_root (see spec/zbspec.yml). Read directly so --stop/--restart keep
+      # working without plumbing the config through every caller.
+      def cache_glob_roots
+        roots = ['tmp']
+        begin
+          require 'yaml'
+          cfg = YAML.safe_load(File.read('spec/zbspec.yml')) || {}
+          root = cfg['cache_root']
+          roots << File.expand_path(root.to_s) if root && !root.to_s.strip.empty?
+        rescue StandardError
+          nil
+        end
+        roots
+      end
+
       def discover_cache_dirs(mode, game_version: nil)
-        all = Dir.glob('tmp/cache_*').select { |d| File.directory?(d) }.sort
+        all = cache_glob_roots.flat_map { |root| Dir.glob(File.join(root, 'cache_*')) }
+                             .select { |d| File.directory?(d) }.sort
         filter = { sp: 'cache_sp_', server: 'cache_server_', client: 'cache_client_' }
         dirs = case mode
         when :sp then all.select { |d| d.include?(filter[:sp]) }

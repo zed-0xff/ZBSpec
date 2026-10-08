@@ -116,7 +116,7 @@ module ZBSpec
 
       return Interactive.run_interactive(opts) if opts[:interactive]
 
-      discovery = SpecDiscovery.new
+      discovery = SpecDiscovery.new(spec_dir: Config.new(opts[:config])['spec_dir'] || 'spec')
       opts[:mode] = discovery.recommended_mode if opts[:mode] == :auto
 
       # Multiple versions => compact output only; suppress discovery/mode lines

@@ -151,6 +151,13 @@ module ZBSpec
 
         # Handle error responses (500)
         if response.code == '500'
+          body = response.body.to_s
+          # ZombieBuddy answers 500 "Timeout waiting for Lua task execution" when
+          # the game's Lua thread did not run the task within its 5s budget, e.g.
+          # while loading the world right after connecting. Treat it as transient
+          # (return nil) so pollers (wait_for_player / wait_for_condition) retry
+          # instead of aborting the whole run.
+          return nil if body.include?('Timeout waiting for Lua task execution')
           if @verbosity > 1
             puts "[d] #{response.body}"
           end

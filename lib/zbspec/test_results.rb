@@ -25,6 +25,10 @@ module ZBSpec
       all_tests.count(&:failed?)
     end
 
+    def skipped_count
+      all_tests.count(&:skipped?)
+    end
+
     def total_count
       all_tests.count
     end
@@ -42,6 +46,7 @@ module ZBSpec
         total: total_count,
         passed: passed_count,
         failed: failed_count,
+        skipped: skipped_count,
         sections: sections.transform_values { |tests| tests.map(&:to_h) }
       }
     end
